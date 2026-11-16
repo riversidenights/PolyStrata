@@ -152,7 +152,8 @@ VISION_START = "<|vision_start|>"
 # ends the first turn: the system prompt with the tools, which "warm_start" keeps.
 TURN_OPENERS = {"function": ("<|im_start|>",), "gemma": ("<|turn>",),
                 "glm": ("<|system|>", "<|developer|>", "<|user|>", "<|assistant|>", "<|observation|>"),
-                "dsml": ("<｜User｜>", "<｜Assistant｜>"), "lfm2": ("<|im_start|>",)}
+                "dsml": ("<｜User｜>", "<｜Assistant｜>"), "lfm2": ("<|im_start|>",),
+                "hy": ("<｜hy_User｜>", "<｜hy_Assistant｜>")}
 WARM_MIN_TOKENS = 2048           # a shorter prompt start is quick to read again: not kept
 # #606: a reply that repeats one token this many times in a row is ended there ("length"): a model in a loop, or a
 # broken state that answers one token forever (an issue saw 36,689 tokens of "!"). The config's "repeat_stop_tokens"
@@ -3400,11 +3401,15 @@ class Service:
         # how the model writes a tool call (serve/frontend.py's OutputParser)
         pre = getattr(tokenizer, "pre", "")
         self.call_format = "glm" if pre in ("glm4", "glm5", "flint") else "gemma" if pre == "gemma4" else \
-            "dsml" if pre in ("joyai-llm", "deepseek-v3") else "lfm2" if pre == "lfm2" else "function"
+            "dsml" if pre in ("joyai-llm", "deepseek-v3") else "lfm2" if pre == "lfm2" else \
+            "hy" if pre == "hunyuan-dense" else "function"
         self.turn_ids = frozenset(t[0] for t in (tokenizer.encode(s, parse_special=True)
                                                  for s in TURN_OPENERS[self.call_format]) if len(t) == 1)
         self.engine.turn_ids = self.turn_ids            # the GEN line's turn_at (StrataEngine.turn_key)
         self.think_open_ids = []
+        # Hy-MT2's template opens the reasoning only for the efforts low and high and writes an empty one otherwise:
+        # a reply starts inside the reasoning when its prompt ends on this token (prepare())
+        self.think_tail_ids = tokenizer.encode("<think>", parse_special=True) if self.call_format == "hy" else []
         if self.call_format == "gemma":
             # after its calls Gemma opens the tools' answer, which is the client's to give: the reply ends there.
             # Its template opens the reasoning for it after a tool's answer; run() looks for that at the prompt's end
@@ -4421,6 +4426,12 @@ class Service:
         # preserve_thinking is the default; a request's chat_template_kwargs can still turn it off.
         kwargs = {**self.template_tokens, **({"preserve_thinking": True} if self.preserve_thinking else {}), **kwargs,
                   "enable_thinking": not off}
+        if self.call_format == "hy":
+            # Hy-MT2's template knows the efforts high, low and no_think, takes any other as no_think and has no
+            # enable_thinking: the levels the APIs send are put in its words.  No effort is no_think, the model's own
+            # default (its card calls it a fast-thinking model).
+            kwargs["reasoning_effort"] = "no_think" if off else {"low": "low", "medium": "low", "high": "high",
+                                                                 "xhigh": "high", "max": "high"}.get(effort, "no_think")
         if self.call_format in ("gemma", "dsml") and tools:   # their templates read a tool as OpenAI sends it
             tools = [{"type": "function", "function": t} for t in tools]
         if not self.effort_end or (not off and effort in (None, "", "xhigh", "high")):
@@ -4665,6 +4676,9 @@ class Service:
             write_temporary(combined, [p for p, _ in encoded])
         if req is not None and req.get("strata_prefix") is not None:
             req["strata_prefix"] = self.resolve_prefix(req["strata_prefix"], messages, tools, kwargs, ids, bool(images))
+        if self.call_format == "hy":                    # as its template ended the prompt: on an open <think> or not
+            tail = self.think_tail_ids
+            return ids, bool(tail) and encoded_ids[-len(tail):] == tail, max_new
         return ids, kwargs.get("enable_thinking", True) is not False, max_new
 
     PREFIX_END = "\u0001strata-prefix-end\u0001"          # marks where a message's shared part ends in the rendered prompt

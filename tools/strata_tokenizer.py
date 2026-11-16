@@ -132,8 +132,16 @@ QWEN2_PATTERN = (
 
 PRE_PATTERNS = {"glm4": GLM4_PATTERN, "glm5": GLM4_PATTERN,   # every other name: QWEN35_PATTERN, as before
                 "gemma4": GEMMA4_PATTERN, "lfm2": GLM4_PATTERN, "kolibri1": QWEN2_PATTERN}
-PRE_SEQUENCES = {"joyai-llm": DEEPSEEK3_SEQUENCE, "deepseek-v3": DEEPSEEK3_SEQUENCE, "flint": FLINT_SEQUENCE}
+# `hunyuan-dense` (Hy-MT2-30B-A3B, llama.cpp's "hy_v3") is LLAMA_VOCAB_PRE_TYPE_HUNYUAN_DENSE, which llama.cpp
+# splits with DEEPSEEK3_LLM's three patterns
+PRE_SEQUENCES = {"joyai-llm": DEEPSEEK3_SEQUENCE, "deepseek-v3": DEEPSEEK3_SEQUENCE, "flint": FLINT_SEQUENCE,
+                 "hunyuan-dense": DEEPSEEK3_SEQUENCE}
 IGNORE_MERGES = ("glm4", "glm5", "lfm2")
+# Hy-MT2's vocabulary has no token for some single bytes, the carriage return among them: its own tokenizer
+# (tokenizer.json: BPE with no unk_token) leaves such a byte out before it merges, so "\r\n\r\n" is the one
+# token of "\n\n".  llama.cpp leaves it out after the merges and gets two tokens there; the model was trained with
+# the first.  The other vocabularies have every byte, and a piece outside them stays an error.
+DROP_UNKNOWN = ("hunyuan-dense",)
 RAW = ("gemma4",)                      # vocabularies of UTF-8 pieces
 MODELS = {"gpt2": None, "gemma4": "gemma4"}   # tokenizer.ggml.model -> the pre-tokenizer it implies, if any
 
@@ -165,6 +173,7 @@ class Tokenizer:
         self.pre_sequence = PRE_SEQUENCES.get(pre)
         self.pre_pattern = self.pre_sequence[-1] if self.pre_sequence else PRE_PATTERNS.get(pre, QWEN35_PATTERN)
         self.ignore_merges = pre in IGNORE_MERGES
+        self.drop_unknown = pre in DROP_UNKNOWN
         self._re = regex.compile(self.pre_pattern)
         self._seq = [regex.compile(x) for x in self.pre_sequence] if self.pre_sequence else None
 
@@ -369,6 +378,8 @@ class Tokenizer:
             got = cache.get(piece)
             if got is None:
                 mapped = "".join(BYTE_TO_UNICODE[b] for b in piece.encode("utf-8"))
+                if self.drop_unknown:   # before the merges, as the model's own tokenizer does
+                    mapped = "".join(c for c in mapped if c in self.ids)
                 if self.ignore_merges and mapped in self.ids:
                     got = [self.ids[mapped]]
                 else:

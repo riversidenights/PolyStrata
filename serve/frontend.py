@@ -953,6 +953,25 @@ def parse_glm_tool_call(body: str, schema: dict | None = None) -> ToolCall:
     return ToolCall(name=name.strip(), arguments=args)
 
 
+# Hy-MT2's template (llama.cpp's "hy_v3") writes GLM's call with a separator after the name, a line each, inside a
+# block of its own: <tool_calls>\n<tool_call>NAME<tool_sep>\n<arg_key>K</arg_key>\n<arg_value>V</arg_value>\n
+# </tool_call>\n</tool_calls>
+HY_SEP = "<tool_sep>"
+HY_BLOCK = ("<tool_calls>", "</tool_calls>")
+
+
+def hy_call_name(text: str) -> str | None:
+    """A Hy-MT2 call's name, or None while it is still arriving."""
+    name = glm_call_name(text)
+    return None if name is None else name.replace(HY_SEP, "").strip()
+
+
+def parse_hy_tool_call(body: str, schema: dict | None = None) -> ToolCall:
+    """`NAME<tool_sep>\\n<arg_key>K</arg_key>\\n<arg_value>V</arg_value>...` -> ToolCall."""
+    call = parse_glm_tool_call(body, schema)
+    return ToolCall(name=call.name.replace(HY_SEP, "").strip(), arguments=call.arguments)
+
+
 # Gemma 4 writes a call as <|tool_call>call:NAME{key:value,...}<tool_call|>.  A value is a string between two
 # <|"|> tokens, a number, true, false, null, a {key:value} mapping or a [value] list (its chat template's
 # format_argument; llama.cpp's common/parsers/gemma4.cpp reads the same).
@@ -1183,13 +1202,14 @@ class OutputParser:
         self.whole = {"glm": (glm_call_name, glm_call_end, parse_glm_tool_call),
                       "gemma": (gemma_call_name, gemma_call_end, parse_gemma_tool_call),
                       "dsml": (dsml_call_name, dsml_call_end, parse_dsml_tool_call),
-                      "lfm2": (lfm2_call_name, lfm2_call_end, parse_lfm2_tool_calls)}.get(call_format)
+                      "lfm2": (lfm2_call_name, lfm2_call_end, parse_lfm2_tool_calls),
+                      "hy": (hy_call_name, glm_call_end, parse_hy_tool_call)}.get(call_format)
         self.call_start, self.call_stop = {"gemma": (GEMMA_CALL, GEMMA_CALL_END),
                                            "dsml": (DSML_INVOKE, DSML_INVOKE_END),
                                            "lfm2": (LFM2_CALL, LFM2_CALL_END)}.get(call_format,
                                                                                    (CALL_START, CALL_END))
         # tags around the calls that are neither a call nor content (DeepSeek V4's block of calls)
-        self.noise = DSML_BLOCK if call_format == "dsml" else ()
+        self.noise = DSML_BLOCK if call_format == "dsml" else HY_BLOCK if call_format == "hy" else ()
         # Gemma opens its reasoning itself, as a channel, and ends it with a token of its own; the others' reasoning
         # is opened by the prompt and ends with </think>.  `opened`: this prompt ended on Gemma's opening (its
         # template writes it after a tool's answer), so the reply starts inside the reasoning.  GLM's calls come
