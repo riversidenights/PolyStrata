@@ -6,7 +6,8 @@ option existed. The format halves the KV cache's VRAM. On the `qwen35moe` models
 Flint and LFM2.5 they move at about 2-3% of the steps (below).
 
 In this version it is offered for `qwen35moe` (Tiel, Ornith, Occamy), `kolibri1`, `flint` and `lfm2moe`
-(LFM2.5-24B-A2B) files; another architecture is rejected at load.
+(LFM2.5-24B-A2B) files; another architecture is rejected at load. `hy_v3` (Hy-MT2-30B-A3B) is accepted too, with
+LFM2.5's code for it, and has not been run in either format ([HYMT2.md](HYMT2.md)).
 
 Gemma 4 has its own two, in the same Q8_0 rule but its own layout: `--kv int8` and `--kv int8k`
 ([the int8 pair, below](#the-int8-pair-for-gemma-4-strata-poly---kv-int8-and---kv-int8k)).
@@ -260,7 +261,7 @@ The three run configs (`strata-tiel.json`, `strata-ornith.json` and `strata-occa
 - `glm5next` / GLM 5.3 Flash (`dsa_attend`): its attention is not the one this cache quantizes, so neither
   `--kv q8_0` nor `--kv int8` is offered for it.
 - `--kv q8_0` and a `gemma4` file: still rejected cleanly at load
-  (`--kv q8_0 is supported for qwen35moe, kolibri1, flint and lfm2moe models in v1; this is a 'gemma4' model`),
+  (`--kv q8_0 is supported for qwen35moe, kolibri1, flint, lfm2moe and hy_v3 models in v1; this is a 'gemma4' model`),
   not run.
 - ROCm/HIP: the same kernels, measured below on an AMD card (it was rejected on HIP until that was done).
 - The default path stays byte-identical to the last release.

@@ -121,6 +121,13 @@ one 32 GB V100 wrote 91 tokens/s and read a 32K prompt at 1,017 tokens/s (first 
 layers split wrote 93 and read it at 2,179 (first token 15.3 s); three runs, the medians above. `--model`
 takes Q4_K_M, Q2_K on a PC with little RAM, or Q3_K_M by name. The support is new, the GGUF independent: ask first.
 
+`--family hymt2` (Hy-MT2-30B-A3B, Tencent's translation model, in Tencent's own GGUFs) is on the same engine and
+newer still: the engine's code for it has not run on a card yet ([HYMT2.md](HYMT2.md)). An 18 or 32 GB download,
+about 25 or 39 GB of RAM beside an 8 GB card and 21 or 35 beside a 12 GB one by setup's estimate, which is computed
+from the files and not measured; no images and no draft model. It takes 98,304 bytes of VRAM a context token, so
+give it a short context (`--context 8192`). Install it only when the user asks for this model, and tell them it
+is untested.
+
 ## 4. Run setup without questions
 
 From the PolyStrata folder (Windows: in `cmd`, or `cmd /c START-HERE.bat ...` from PowerShell):

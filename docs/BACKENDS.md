@@ -24,11 +24,13 @@ a second machine, a Windows laptop whose card has 8 GB.
 | LFM2.5-24B-A2B | `lfm2moe` | `strata-poly` | Unsloth UD-Q4_K_XL, UD-Q3_K_XL, UD-Q6_K_XL and Q8_0, Liquid AI QAD-Q4_0, 10.9 to 25.5 GB | repeats only: there is no draft model |
 | Flint 40B-A2.5B | `flint` | `strata-poly` | Unsloth UD-Q4_K_XL, UD-Q3_K_XL, UD-Q6_K_XL and Q8_0, 18.5 to 42.3 GB | repeats only: there is no draft model |
 | Kolibri 1 | `kolibri1` | `strata-poly` | Hob-forge Q4_K_M, Q2_K and Q3_K_M, 28.6 to 47.5 GB | repeats only: there is no draft model |
+| Hy-MT2-30B-A3B | `hy_v3` | `strata-poly` | none yet: Tencent's Q4_K_M and Q8_0, 18.2 and 32.0 GB, are what setup installs; the code has not run on a card ([HYMT2.md](HYMT2.md)) | repeats only: there is no draft model |
 | Clover-35B-A3B-Preview | `clover_moe` | `strata-poly` | maternion Q3_K_M and Q4_K_M, IsValorum APEX-I-NanoPlus, 12.6 to 21.2 GB | repeats only: its own block guesses are off ([below](#clover-35b-a3b-preview)) |
 
 `strata` is the first engine and runs Qwen3.8 only; nothing in it changed. `strata-poly` is the engine that reads a
-GGUF in place, and it now has eight architectures. It was called `strata-glm`, after its first model; an install
-from then keeps its engine and moves to the new name the next time setup updates it.
+GGUF in place, and it now has nine architectures, the ninth (`hy_v3`) written and not yet run. It was called
+`strata-glm`, after its first model; an install from then keeps its engine and moves to the new name the next time
+setup updates it.
 
 The optional CUDA [GDN prefill adapter](DETAILS.md#strata-poly-chunked-gdn-prefill) uses
 `STRATA_GDN_MMA=1` for eligible Qwen35 reads. It is off by default; that section lists its shape and device limits.
@@ -71,6 +73,10 @@ straight to it. The larger models have pages of their own,
 ./setup.sh --family clover
 ```
 
+```bash
+./setup.sh --family hymt2
+```
+
 | Family | Model | File | Download | RAM beside an 8 GB card (estimate) |
 | --- | --- | --- | --- | --- |
 | `qwen36` | Qwen3.6-35B-A3B | Unsloth UD-Q3_K_M | 17.1 GB | about 21 GB |
@@ -96,6 +102,8 @@ straight to it. The larger models have pages of their own,
 | `kolibri` | Kolibri 1 | Hob-forge Q4_K_M | 47.5 GB | about 52 GB |
 | | | Hob-forge Q2_K | 28.6 GB | about 33 GB |
 | | | Hob-forge Q3_K_M | 37.5 GB | about 42 GB |
+| `hymt2` | Hy-MT2-30B-A3B | Tencent Q4_K_M | 18.2 GB | about 25 GB (computed, not measured) |
+| | | Tencent Q8_0 | 32.0 GB | about 39 GB (computed, not measured) |
 | `clover` | Clover-35B-A3B-Preview | maternion Q3_K_M | 16.8 GB | about 20 GB |
 | | | IsValorum APEX-I-NanoPlus | 12.6 GB | about 16 GB |
 | | | maternion Q4_K_M | 21.2 GB | about 25 GB |
@@ -107,6 +115,10 @@ read a 32K prompt at 1,017 tokens/s (first token 32.7 s) and wrote 91; two read 
 (first token 15.3 s) and wrote 93, the medians of three runs. It also takes `--kv q8_0`: the attention
 caches as ggml Q8_0 blocks, 544 bytes a row instead of 1,024, the window layers' rings included; fp16 is
 the default and that path is unchanged.
+
+Hy-MT2-30B-A3B is a translation model whose engine code is new and has not run on a card: its page,
+[HYMT2.md](HYMT2.md), says what was checked without one and how to try it. Every one of its 48 layers keeps its
+whole past, 98,304 bytes of VRAM a context token, so a short context suits it.
 
 A family's first size is the one setup takes. On a PC with less RAM than that wants it takes the second, the
 smallest, and the third is by name: `--model UD-Q4_K_M`, `--model APEX-I-QUALITY`, `--model UD-Q4_K_XL`. The
@@ -232,6 +244,7 @@ key, so a model the engine cannot run is listed as unavailable with the reason i
 | `deepseek4` | `DeepSeek4` |
 | `lfm2moe` | `Lfm2Moe` |
 | `kolibri1` | `Kolibri1` |
+| `hy_v3` | `HyV3` |
 | `clover_moe` | `Qwen35` |
 
 Within an architecture the shape comes from the file: layer counts, widths, head counts, expert counts, which
@@ -250,6 +263,7 @@ and, by the tokenizer's `pre` name, how the model writes its reasoning and its t
 | LFM2.5 | the prompt opens it, `</think>` ends it | `<\|tool_call_start\|>[NAME(K='V', ...), NAME2()]<\|tool_call_end\|>` |
 | Flint | `<think>` to `</think>`, opened by the model | as GLM's |
 | Kolibri 1 | the prompt opens it, `</think>` ends it | a JSON object in the wrapper: `{"name": NAME, "arguments": {...}}` |
+| Hy-MT2 | off unless the request names an effort; then the prompt opens it, `</think>` ends it | `<tool_calls><tool_call>NAME<tool_sep><arg_key>K</arg_key><arg_value>V</arg_value>...` |
 
 Gemma 4's template thinks only when it is told to, reads a tool in OpenAI's shape and starts with the tokenizer's
 `<bos>`; the server gives it all three. A tool's answers are put in the order of their calls for every model,

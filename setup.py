@@ -628,7 +628,7 @@ FAMILIES = {
     # own GGUFs.  "untried": the engine's code for it was written from llama.cpp's graph and transformers' model and
     # has not run on a card yet, so nothing here is measured.  "arena_gb" (the routed experts) is from each file's
     # tensor list; "vram_beside_gb" is computed, not measured: the weights outside the experts (0.9 and 1.4 GiB), the
-    # attention rows of a 32K context (2.9 GiB) and the other models' 2.3 GiB of buffers and reserve.  "row_bytes":
+    # attention rows of a 32K context (3.0 GiB) and the other models' 2.3 GiB of buffers and reserve.  "row_bytes":
     # every one of the 48 layers keeps the keys and values of its whole past, 4 heads of 128 halves each, 2,048 B a
     # token a layer: three to five times the other models' rows, so a long context takes more VRAM here.
     "hymt2": {"title": "Hy-MT2-30B-A3B", "by": "Tencent",
