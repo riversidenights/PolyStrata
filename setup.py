@@ -90,6 +90,7 @@ HF_REVISIONS = {
     "unsloth/flint-GGUF": "20468edfc38ab43d6914cc88b08cbecb05d0fc62",                                 # 2026-10-21
     "openbmb/MiniCPM-V-4.7-35B-A3B-gguf": "77f6d8cb08b2b115ce27d2e2ac1359e126921689",                   # 2026-10-12
     "Hob-forge/Kolibri-1-GGUF": "40eaa5cf6cfca3afaf8b8832bac962652edb0bde",                              # 2026-10-08
+    "tencent/Hy-MT2-30B-A3B-GGUF": "fd3dcbb6b31e9e03923ef4f9f42500f74c3851c3",                           # 2026-07-23
     "maternion/Clover-35B-A3B-Preview-GGUF": "2077d69015d943d8a82fa80bf39b36cf080cd520",                 # 2026-10-28
     "IsValorum/Clover-35B-A3B-Preview-APEX-I-NanoPlus-V2.1-GGUF": "d22b8db8efc6dfe15df84264e2fae26fafe530bb",  # 2026-10-28
     "Diffuspace/Clover-35B-A3B-Preview": "4b0402b65e523d0183a14c431955438714cb16ff",                     # 2026-10-28
@@ -623,6 +624,28 @@ FAMILIES = {
                            (28634017760, "de2fac5230621125f0309046175a17f8cc554ee2fc2a199c0e6528f2e4aadd79"),
                            "Kolibri-1-Q3_K_M.gguf":
                            (37523996640, "b797de9cebb5f8b6e12e32a57c76776c83c2c077e6804fa4835aa6ab5e9e79da")}},
+    # Hy-MT2-30B-A3B (llama.cpp's "hy_v3") on strata-poly: Tencent's translation model, 33 languages, in Tencent's
+    # own GGUFs.  "untried": the engine's code for it was written from llama.cpp's graph and transformers' model and
+    # has not run on a card yet, so nothing here is measured.  "arena_gb" (the routed experts) is from each file's
+    # tensor list; "vram_beside_gb" is computed, not measured: the weights outside the experts (0.9 and 1.4 GiB), the
+    # attention rows of a 32K context (2.9 GiB) and the other models' 2.3 GiB of buffers and reserve.  "row_bytes":
+    # every one of the 48 layers keeps the keys and values of its whole past, 4 heads of 128 halves each, 2,048 B a
+    # token a layer: three to five times the other models' rows, so a long context takes more VRAM here.
+    "hymt2": {"title": "Hy-MT2-30B-A3B", "by": "Tencent",
+              "about": "a translation model on the strata-poly engine, NEW: its engine code has not run on a card "
+                       "yet; an 18 GB file, ~25 GB of RAM beside an 8 GB card (computed, not measured); an 8-bit "
+                       "size too, no images",
+              "hf": hf("tencent/Hy-MT2-30B-A3B-GGUF"), "file": "Hy-MT2-30B-A3B-{q}.gguf", "shards": 1,
+              "tag": "hymt2-", "name": "hy-mt2-30b-a3b", "engine": "poly", "vision": False, "experimental": True,
+              "untried": True, "row_bytes": 98304,
+              "models": {"Q4_K_M": {"about": "4-bit: Q4_K gate/up, Q6_K down on some layers (Tencent's imatrix)",
+                                    "download_gb": 18.2, "ram_gb": 25, "arena_gb": 17.2, "vram_beside_gb": 6.2},
+                         "Q8_0": {"about": "8-bit throughout: the closest to the model as trained",
+                                  "download_gb": 32.0, "ram_gb": 39, "arena_gb": 30.2, "vram_beside_gb": 6.8}},
+              "sha256": {"Hy-MT2-30B-A3B-Q4_K_M.gguf":
+                         (18236702880, "bb44b11bb0f7cd3d1321645b41e911cd3de2e473731227fc6bf37aa18b543f88"),
+                         "Hy-MT2-30B-A3B-Q8_0.gguf":
+                         (31985729376, "d4e74d3b9479db5a7e2e4728879e15554b385e9549b411cc8b0ad03b2970ce98")}},
     "qwen36": {"title": "Qwen3.6-35B-A3B", "by": "Qwen; quantized by Unsloth",
                "about": "on the strata-poly engine: one NVIDIA card, Linux or Windows; a 17 GB file, ~21 GB of RAM "
                         "beside an 8 GB card; a smaller and a larger size too",
@@ -2373,7 +2396,8 @@ def verify_sha256(s: Path, size: int, sha: str, own: bool = False) -> None:
 # general.architecture of each strata-poly family's GGUFs, the name Engine::open() (src/poly/engine.cpp) picks its
 # code by; the families not listed are qwen35moe
 POLY_GGUF_ARCHS = {"glm": ("glm5-next", "glm5next"), "deepseek": ("deepseek4",), "lfm25": ("lfm2moe",),
-                   "gemma4": ("gemma4",), "flint": ("flint",), "kolibri": ("kolibri1",), "clover": ("clover_moe",)}
+                   "gemma4": ("gemma4",), "flint": ("flint",), "kolibri": ("kolibri1",), "clover": ("clover_moe",),
+                   "hymt2": ("hy_v3",)}
 
 
 def gguf_arch(s: Path) -> str:
@@ -6849,12 +6873,16 @@ def poly_setup(a, family, gpu, hip, cuda_tk, multi, ram, data, elsewhere, port, 
         warn(f"{title} on AMD cards on Windows: EXPERIMENTAL.  Setup compiles the HIP engine here (AMD's ROCm "
              "wheels), which has run Tiel Coder on an RX 9070 XT and Qwen3.6, Ornith, Tiel Coder and Gemma 4 on an "
              "RX 5700 XT, and nothing else yet; the log says where it stops if it does")
-    elif hip and family in ("glm", "deepseek", "flint", "kolibri", "clover"):   # the engine runs on AMD, these not yet
+    elif hip and family in ("glm", "deepseek", "flint", "kolibri", "clover", "hymt2"):   # the engine runs on AMD, these not yet
         warn(f"{title} on the AMD card has not been tried: the engine runs there, this model was not")
     if cuda_tk == 12:
         warn(f"{title}'s engine with CUDA 12 is compiled here (the ready-made one is CUDA 13)" +
              (": on Pascal / Volta it is untested" if int(gpu["arch"]) < CUDA13_MIN_ARCH else ""))
-    if WIN and not fam.get("windows"):
+    if fam.get("untried"):   # said once, for any system: there is no "run on Linux only" to say of it
+        warn(f"{title} is NEW here: the engine's code for it was written from llama.cpp's and transformers' and has "
+             "not run on a card yet. It may stop at the load or answer wrongly; setup's RAM and VRAM figures for "
+             "it are computed from its file, not measured. A report of what it does helps (docs/HYMT2.md)")
+    elif WIN and not fam.get("windows"):
         confirm_risk(f"{title} has been run on Linux only: its engine compiles on Windows, the model was not tried "
                      "there", bool(a.family), a.yes, f"{title} has not been tried on Windows",
                      f"use Linux, or --family {family} --yes to try it here")
@@ -6918,8 +6946,9 @@ def poly_setup(a, family, gpu, hip, cuda_tk, multi, ram, data, elsewhere, port, 
         "(the OS file cache).")
     if room < beside + 2:
         enc = vision == "gpu"                          # the encoder's share may be what does not fit
-        confirm_risk(f"{title} takes about {beside} GB of VRAM before any expert (measured on a 32 GB "
-                     f"card at a 32K context)" + (f" and its image encoder {fam['vision_vram_gb']} GB" if enc else "") +
+        confirm_risk(f"{title} takes about {beside} GB of VRAM before any expert (" +
+                     ("computed from its file for" if fam.get("untried") else "measured on a 32 GB card at") +
+                     " a 32K context)" + (f" and its image encoder {fam['vision_vram_gb']} GB" if enc else "") +
                      f"; {gpu_name(gpu)} has less than it takes to start", bool(a.model), a.yes,
                      f"{title} needs more VRAM than {vram:.0f} GB",
                      ("--vision cpu keeps the image encoder off the card; " if enc else "") +
@@ -6927,7 +6956,7 @@ def poly_setup(a, family, gpu, hip, cuda_tk, multi, ram, data, elsewhere, port, 
         warn(f"going on with {vram:.0f} GB of VRAM, as you chose")
     elif vram < 30:
         ran = fam.get("ran_on_gb", 32)                 # a card of 8 GB reports 8,188 MiB
-        warn((f"{title} has run on no card under {ran} GB. " if round(vram) < ran else "") +
+        warn(("" if fam.get("untried") else f"{title} has run on no card under {ran} GB. " if round(vram) < ran else "") +
              f"On {vram:.0f} GB about {100 * held / d['arena_gb']:.0f}% of {title}'s experts fit in VRAM "
              f"({100 * poly_held_gb(d, 31.84) / d['arena_gb']:.0f}% on a 32 GB card): more of every answer is "
              "computed on the CPU, so it is slower")
