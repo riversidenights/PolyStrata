@@ -1505,5 +1505,116 @@
     "43bdc1b0cb764b5531d320816fb6004245256a414bfd55f1fdb69e3db42eaa57"
    ]
   }
+ },
+ "glm45air/UD-Q4_K_XL": {
+  "engine": "strata-poly",
+  "archs": [
+   "glm4moe"
+  ],
+  "files": [
+   "UD-Q4_K_XL/GLM-4.5-Air-UD-Q4_K_XL-00001-of-00002.gguf",
+   "UD-Q4_K_XL/GLM-4.5-Air-UD-Q4_K_XL-00002-of-00002.gguf"
+  ],
+  "repo": "unsloth/GLM-4.5-Air-GGUF",
+  "pins": {
+   "GLM-4.5-Air-UD-Q4_K_XL-00001-of-00002.gguf": [
+    49580287296,
+    "1acd6d4acdb4f463c9a61696cb7e830e1a34134e610b573e87a4397adcd90bd7"
+   ],
+   "GLM-4.5-Air-UD-Q4_K_XL-00002-of-00002.gguf": [
+    18140784576,
+    "8e220a3cdf4e19763cc7a5fd0a6215f1da1b3fda1306e64e88456d045c2007f8"
+   ]
+  }
+ },
+ "glm45air/UD-Q3_K_XL": {
+  "engine": "strata-poly",
+  "archs": [
+   "glm4moe"
+  ],
+  "files": [
+   "UD-Q3_K_XL/GLM-4.5-Air-UD-Q3_K_XL-00001-of-00002.gguf",
+   "UD-Q3_K_XL/GLM-4.5-Air-UD-Q3_K_XL-00002-of-00002.gguf"
+  ],
+  "repo": "unsloth/GLM-4.5-Air-GGUF",
+  "pins": {
+   "GLM-4.5-Air-UD-Q3_K_XL-00001-of-00002.gguf": [
+    49926035200,
+    "1c24976f0ba51fcd5fc21365e82cf4d2b08d1be9de4247d2842e410a50fd4b2c"
+   ],
+   "GLM-4.5-Air-UD-Q3_K_XL-00002-of-00002.gguf": [
+    4859770400,
+    "b145bbd431b0c4a6816094403286f8250b4581a7e39baf4f76b49244a4a489f4"
+   ]
+  }
+ },
+ "glm45air/UD-IQ3_XXS": {
+  "engine": "strata-poly",
+  "archs": [
+   "glm4moe"
+  ],
+  "files": [
+   "UD-IQ3_XXS/GLM-4.5-Air-UD-IQ3_XXS-00001-of-00002.gguf",
+   "UD-IQ3_XXS/GLM-4.5-Air-UD-IQ3_XXS-00002-of-00002.gguf"
+  ],
+  "repo": "unsloth/GLM-4.5-Air-GGUF",
+  "pins": {
+   "GLM-4.5-Air-UD-IQ3_XXS-00001-of-00002.gguf": [
+    49742530784,
+    "6c9603e6a8db6effbc8dd6a5dd8d6f625f0d6c5ef7eabbff37f12d739cba590a"
+   ],
+   "GLM-4.5-Air-UD-IQ3_XXS-00002-of-00002.gguf": [
+    1702757440,
+    "203a59c0c3a184adfce5f8454b1cdd3e63a7b90ddb010871d24d08c3cea402c8"
+   ]
+  }
+ },
+ "glm45air/UD-Q2_K_XL": {
+  "engine": "strata-poly",
+  "archs": [
+   "glm4moe"
+  ],
+  "files": [
+   "GLM-4.5-Air-UD-Q2_K_XL.gguf"
+  ],
+  "repo": "unsloth/GLM-4.5-Air-GGUF",
+  "pins": {
+   "GLM-4.5-Air-UD-Q2_K_XL.gguf": [
+    47444888640,
+    "609fe51f04b1a17941fb3549de50b6fa4137a32641ca23d88e7f1f12ad5deaef"
+   ]
+  }
+ },
+ "glm45air/UD-IQ2_M": {
+  "engine": "strata-poly",
+  "archs": [
+   "glm4moe"
+  ],
+  "files": [
+   "GLM-4.5-Air-UD-IQ2_M.gguf"
+  ],
+  "repo": "unsloth/GLM-4.5-Air-GGUF",
+  "pins": {
+   "GLM-4.5-Air-UD-IQ2_M.gguf": [
+    44389321792,
+    "33d80296f3b0ef0463985a6fe6dc2ad3a4260b09c549487623c1f35f7b6193fd"
+   ]
+  }
+ },
+ "glm45air/UD-IQ2_XXS": {
+  "engine": "strata-poly",
+  "archs": [
+   "glm4moe"
+  ],
+  "files": [
+   "GLM-4.5-Air-UD-IQ2_XXS.gguf"
+  ],
+  "repo": "unsloth/GLM-4.5-Air-GGUF",
+  "pins": {
+   "GLM-4.5-Air-UD-IQ2_XXS.gguf": [
+    42682240064,
+    "63158240af293e1b34eb2c4ed3a0256dce3a3324f55fbe141698c47fd4b4a7a8"
+   ]
+  }
  }
 }

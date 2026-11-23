@@ -1445,21 +1445,42 @@ __global__ void add_bias_kernel(const float* __restrict__ b, float* __restrict__
 // One block per head and token.  The pairs of the rotation are i and i + n_rot / 2 for i below n_rot / 2.  With
 // axes, a token has a position on each of three axes, and pair j turns by the one on axis (j % sections) % 3.
 // With `at`, the first token's position is what the card holds there when the launch runs.
+constexpr int kHeadBiasMax = 512;   // the widest head head_bias_rope() takes
+
 // YARN (head_norm_rope_yarn, laguna's full layers): the angle and the magnitude as ggml's rope_yarn makes them; the
 // other instantiation is the kernel as it was, which every other caller runs.
-template <bool YARN>
+// BIASED (head_bias_rope, glm4moe): each head's values get its part of `bias` (heads * dim values) first, and the
+// norm is there only with w; the instantiations without it are the kernel as it was.
+template <bool YARN, bool BIASED = false>
 __global__ void head_norm_rope_kernel(const float* __restrict__ x, int x_stride, const float* __restrict__ w,
                                       float* __restrict__ y, int dim, int heads, int n_rot, float theta_scale,
                                       const float* __restrict__ freq, long long pos, float eps,
                                       const int* __restrict__ axes, int sections,
-                                      const long long* __restrict__ at, int at_stride, RopeYarn yarn) {
+                                      const long long* __restrict__ at, int at_stride, RopeYarn yarn,
+                                      const float* __restrict__ bias = nullptr) {
     __shared__ float part[8];
-    const float* xr = x + size_t(blockIdx.x) * x_stride;
     float* yr = y + size_t(blockIdx.x) * dim;
-    float ss = 0.0f;
-    for (int i = threadIdx.x; i < dim; i += blockDim.x) ss += xr[i] * xr[i];
-    ss = block_sum(ss, part);
-    const float scale = 1.0f / sqrtf(ss / float(dim) + eps);
+    float scale = 1.0f;
+    const float* xr = x + size_t(blockIdx.x) * x_stride;
+    if constexpr (BIASED) {
+        // the biased values go to shared memory, which the turn below then reads in place of x
+        __shared__ float biased[kHeadBiasMax];
+        const float* br = bias + size_t(blockIdx.x % heads) * dim;
+        for (int i = threadIdx.x; i < dim; i += blockDim.x) biased[i] = xr[i] + br[i];
+        __syncthreads();
+        xr = biased;
+        if (w) {
+            float ss = 0.0f;
+            for (int i = threadIdx.x; i < dim; i += blockDim.x) ss += xr[i] * xr[i];
+            ss = block_sum(ss, part);
+            scale = 1.0f / sqrtf(ss / float(dim) + eps);
+        }
+    } else {
+        float ss = 0.0f;
+        for (int i = threadIdx.x; i < dim; i += blockDim.x) ss += xr[i] * xr[i];
+        ss = block_sum(ss, part);
+        scale = 1.0f / sqrtf(ss / float(dim) + eps);
+    }
     const int tok = blockIdx.x / heads;
     // at_stride: a row of its own sequence, its turn at[tok * at_stride] (head_norm_rope_rows())
     const float own = at_stride ? float(at[size_t(tok) * at_stride]) : float((at ? *at : pos) + tok);
@@ -4089,6 +4110,15 @@ void head_norm_rope_yarn(const float* x, int x_stride, const float* w, float* y,
                          const long long* at) {
     head_norm_rope_kernel<true><<<rows * heads, dim >= 256 ? 256 : 128, 0, cs(stream)>>>(
         x, x_stride, w, y, dim, heads, n_rot, theta_scale, nullptr, (long long) pos, eps, nullptr, 1, at, 0, yarn);
+}
+
+void head_bias_rope(const float* x, const float* bias, const float* w, float* y, int dim, int heads, int n_rot,
+                    float theta_scale, int64_t pos, int rows, float eps, void* stream, const long long* at) {
+    if (dim > kHeadBiasMax || n_rot > dim || n_rot % 2 != 0)
+        throw std::invalid_argument("head_bias_rope: a head of at most 512 values, an even turn within it");
+    head_norm_rope_kernel<false, true><<<rows * heads, dim >= 256 ? 256 : 128, 0, cs(stream)>>>(
+        x, dim, w, y, dim, heads, n_rot, theta_scale, nullptr, (long long) pos, eps, nullptr, 1, at, 0, RopeYarn{},
+        bias);
 }
 
 void head_norm_rope_rows(const float* x, int x_stride, const float* w, float* y, int dim, int heads, int n_rot,

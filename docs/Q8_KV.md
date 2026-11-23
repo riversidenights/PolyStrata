@@ -264,7 +264,7 @@ The three run configs (`strata-tiel.json`, `strata-ornith.json` and `strata-occa
 - `glm5next` / GLM 5.3 Flash (`dsa_attend`): its attention is not the one this cache quantizes, so neither
   `--kv q8_0` nor `--kv int8` is offered for it.
 - `--kv q8_0` and a `gemma4` file: still rejected cleanly at load
-  (`--kv q8_0 is supported for qwen35moe, kolibri1, flint, lfm2moe and laguna models in v1; this is a 'gemma4' model`),
+  (`--kv q8_0 is supported for qwen35moe, kolibri1, flint, lfm2moe, laguna and glm4moe models in v1; this is a 'gemma4' model`),
   not run.
 - ROCm/HIP: the same kernels, measured below on an AMD card (it was rejected on HIP until that was done).
 - The default path stays byte-identical to the last release.

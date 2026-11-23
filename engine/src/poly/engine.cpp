@@ -11,6 +11,7 @@
 #include "flint.hpp"
 #include "inkling2.hpp" // its kernels: inkling2.cu, and metal/src/poly/inkling.cpp on Metal
 #if !defined(STRATA_GPU_METAL)
+#include "glm4moe.hpp"  // CUDA and HIP: its biased turn (head_bias_rope) has no Metal kernel yet
 #include "laguna.hpp"   // CUDA and HIP: its YaRN turn and softplus gate have no Metal kernels yet
 #include "expert_card.hpp"
 #endif
@@ -1854,9 +1855,9 @@ std::unique_ptr<Engine> Engine::open(const Options& o) {
     // Clover is a qwen35moe model trained to also guess a block of tokens at once (Qwen35)
     const bool qwen35 = name == "qwen35moe" || name == "clover_moe";
     if (o.kv_format == KvFmt::kQ8_0 && !qwen35 && name != "kolibri1" && name != "flint" && name != "lfm2moe" &&
-        name != "laguna")
-        throw std::runtime_error("--kv q8_0 is supported for qwen35moe, kolibri1, flint, lfm2moe and laguna models in "
-                                 "v1; this is a '" + name + "' model");
+        name != "laguna" && name != "glm4moe")
+        throw std::runtime_error("--kv q8_0 is supported for qwen35moe, kolibri1, flint, lfm2moe, laguna and glm4moe "
+                                 "models in v1; this is a '" + name + "' model");
     // q4_0 is Qwen35's (the other architectures read a q8_0 cache, not this one, and would run fp16 without a word)
     if (o.kv_format == KvFmt::kQ4_0 && !qwen35)
         throw std::runtime_error("--kv q4_0 is supported for qwen35moe models in v1; this is a '" + name + "' model");
@@ -1896,6 +1897,7 @@ std::unique_ptr<Engine> Engine::open(const Options& o) {
         if (name == "inkling2_loop") return std::make_unique<Inkling2>();
 #if !defined(STRATA_GPU_METAL)
         if (name == "laguna") return std::make_unique<Laguna>();
+        if (name == "glm4moe") return std::make_unique<Glm4Moe>();
 #endif
         // Unsloth's own layout of the model (loop_kv_res_query and the like): no public description of it to follow
         if (name == "inkling2")

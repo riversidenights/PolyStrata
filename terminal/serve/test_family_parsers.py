@@ -48,6 +48,7 @@ MATRIX = {
     "ornith122": ("xml", OutputParser, "function"),
     "groot": ("xml", OutputParser, "function"),
     "inkling": ("other", InklingOutputParser, "inkling"),
+    "glm45air": ("json", JsonOutputParser, "glm"),
 }
 
 TOOL = {"type": "function", "function": {"name": "get_weather", "description": "The weather in a city.",

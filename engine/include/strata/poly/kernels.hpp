@@ -343,6 +343,11 @@ void add_bias(const float* b, float* acc, int n, int rows, void* stream);
 void head_norm_rope(const float* x, int x_stride, const float* w, float* y, int dim, int heads, int n_rot,
                     float theta_scale, int64_t pos, int rows, float eps, void* stream, const float* freq = nullptr,
                     const int32_t* axes = nullptr, int sections = 1, const long long* at = nullptr);
+/// glm4moe's turn: each head's values plus its part of `bias` (heads * dim values, the attention's q, k bias), then
+/// with w (null: none) the head's RMS norm with those weights, then head_norm_rope()'s NeoX turn of the first n_rot
+/// values.  x has dim values a head.  `pos` and `at` as head_norm_rope() takes them.  dim is at most 512.
+void head_bias_rope(const float* x, const float* bias, const float* w, float* y, int dim, int heads, int n_rot,
+                    float theta_scale, int64_t pos, int rows, float eps, void* stream, const long long* at = nullptr);
 /// attend() for a step's sequences, each its own rows, cache and position: sequence k's queries q[k] (tokens[k]
 /// rows), its caches, its position at[k] on the card and the room keys[k] its call is sized for, its output
 /// out[k].  score[k] holds its scores and wt[k] its weights, apart from every other sequence's.  Each sequence gets

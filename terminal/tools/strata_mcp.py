@@ -283,6 +283,23 @@ FALLBACK_FAMILIES = {
                                             "download_gb": 79.7, "ram_gb": 66, "arena_gb": 73.0},
                              "Q8_0": {"about": "8-bit throughout: the closest to the model as trained",
                                       "download_gb": 132.6, "ram_gb": 119, "arena_gb": 125.8}}},
+    "glm45air": {"title": "GLM-4.5-Air",
+                 "about": "experimental, on the strata-poly engine: one NVIDIA card (16 GB or more), Linux; 2- to 4-bit "
+                          "files of 43 to 68 GB, no images",
+                 "tag": "glm45air-", "engine": "poly", "vision": False, "experimental": True,
+                 "models": {"UD-Q4_K_XL": {"about": "4-bit experts (Unsloth Dynamic), 5-bit down: the closest to the "
+                                                    "model of these", "download_gb": 67.7, "ram_gb": 71,
+                                           "arena_gb": 60.9},
+                            "UD-Q3_K_XL": {"about": "3-bit K-quant experts, 4- and 5-bit down",
+                                           "download_gb": 54.8, "ram_gb": 59, "arena_gb": 48.4},
+                            "UD-IQ3_XXS": {"about": "3-bit i-quant experts: less RAM than UD-Q3_K_XL",
+                                           "download_gb": 51.4, "ram_gb": 56, "arena_gb": 45.2},
+                            "UD-Q2_K_XL": {"about": "2-bit K-quant experts, 4- and 5-bit down",
+                                           "download_gb": 47.4, "ram_gb": 52, "arena_gb": 41.4},
+                            "UD-IQ2_M": {"about": "2-bit i-quant experts (IQ2_XS and IQ2_S)",
+                                         "download_gb": 44.4, "ram_gb": 49, "arena_gb": 38.5},
+                            "UD-IQ2_XXS": {"about": "2-bit i-quant experts, mostly IQ2_XXS: the least RAM",
+                                           "download_gb": 42.7, "ram_gb": 47, "arena_gb": 36.8}}},
 }
 OWN_PATH_ENGINE = (0, 1, 45)   # the first engine that runs Qwen3.6-35B-A3B with pictures and parallel requests (setup.py MIN_ENGINE note)
 MEMORY_TIERS = ((62.0, "qwen", "IQ3_S"), (46.0, "qwen", "IQ3_XXS"), (38.0, "swift", "IQ2_XS"))   # as setup.py's: RAM + VRAM floors of the owner's 64 / 48 / 40 GB tiers

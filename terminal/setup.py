@@ -148,6 +148,7 @@ HF_REVISIONS = {
     "ornith-ai/Ornith-1.5-122B": "dfa07bab90e90746ffbfc0b0cba3126eb9265de2",                              # 2026-10-20
     "agentionai/Qwen3.8-Flash-Next-Gyro-GGUF": "1ada08422e404aca51ab9df665f089f34c419c6b",           # 2026-10-13
     "bartowski/GrootTeam_Groot-19B-A3B-261023-GGUF": "0025df0d03fb385344394f4e5afd73ce47da0680",
+    "unsloth/GLM-4.5-Air-GGUF": "506d64aa8c5cfe9dbbf00bc7a15739438f83204d",                              # 2025-12-25
 }
 
 
@@ -1302,6 +1303,67 @@ FAMILIES = {
                              (32785752352, "43bdc1b0cb764b5531d320816fb6004245256a414bfd55f1fdb69e3db42eaa57"),
                              "mmproj-F16.gguf":
                              (908724544, "39db176176a904b101f5173a4f03e785990f9279f94ab373c4fd629ae7011817")}},
+    # GLM-4.5-Air (llama.cpp's glm4moe) on strata-poly: Z.ai's 106B-A12B, 46 layers of full attention (96 query heads
+    # over 8 key heads of 128) with 128 routed experts, 8 a token, beside a shared one; Unsloth's 2- to 4-bit files.
+    # NOT MEASURED: no size has run here yet.  "arena_gb" is each file's routed experts, layers 0 to 45 (the guessing
+    # block after them, 1.5 to 2.1 GB, is not run: it has a token table and output of its own); "row_bytes" is 46
+    # layers' fp16 keys and values (46 * 2 * 8 * 128 * 2 bytes), half that and a little under --kv q8_0;
+    # "vram_beside_gb" is an estimate: the other weights (4.4 to 4.6 GB), 32K tokens of fp16 rows (6.2 GB) and about
+    # 2.5 GB of buffers.  "ram_gb" is poly_ram_need() for an 8 GB card.
+    "glm45air": {"title": "GLM-4.5-Air", "by": "Z.ai; quantized by Unsloth",
+                 "about": "experimental, on the strata-poly engine: one NVIDIA card (16 GB or more), Linux; "
+                          "2- to 4-bit files of 43 to 68 GB, no images",
+                 "hf": hf("unsloth/GLM-4.5-Air-GGUF"), "file": "GLM-4.5-Air-{q}.gguf",
+                 "shards": 1, "tag": "glm45air-", "name": "glm-4.5-air", "engine": "poly",
+                 "vision": False, "experimental": True, "row_bytes": 188416,
+                 "models": {"UD-Q4_K_XL": {"about": "4-bit experts (Unsloth Dynamic), 5-bit down: the closest to the "
+                                                    "model of these", "download_gb": 67.7, "ram_gb": 71,
+                                           "arena_gb": 60.9, "vram_beside_gb": 13.0, "shards": 2,
+                                           "file": "UD-Q4_K_XL/GLM-4.5-Air-UD-Q4_K_XL-0000{i}-of-00002.gguf",
+                                           "memory_basis": "estimated from the file's tensors, not measured"},
+                            "UD-Q3_K_XL": {"about": "3-bit K-quant experts, 4- and 5-bit down",
+                                           "download_gb": 54.8, "ram_gb": 59, "arena_gb": 48.4,
+                                           "vram_beside_gb": 13.0, "shards": 2,
+                                           "file": "UD-Q3_K_XL/GLM-4.5-Air-UD-Q3_K_XL-0000{i}-of-00002.gguf",
+                                           "memory_basis": "estimated from the file's tensors, not measured"},
+                            "UD-IQ3_XXS": {"about": "3-bit i-quant experts: less RAM than UD-Q3_K_XL",
+                                           "download_gb": 51.4, "ram_gb": 56, "arena_gb": 45.2,
+                                           "vram_beside_gb": 13.0, "shards": 2,
+                                           "file": "UD-IQ3_XXS/GLM-4.5-Air-UD-IQ3_XXS-0000{i}-of-00002.gguf",
+                                           "memory_basis": "estimated from the file's tensors, not measured"},
+                            "UD-Q2_K_XL": {"about": "2-bit K-quant experts, 4- and 5-bit down",
+                                           "download_gb": 47.4, "ram_gb": 52, "arena_gb": 41.4,
+                                           "vram_beside_gb": 13.0, "shards": 1,
+                                           "file": "GLM-4.5-Air-UD-Q2_K_XL.gguf",
+                                           "memory_basis": "estimated from the file's tensors, not measured"},
+                            "UD-IQ2_M": {"about": "2-bit i-quant experts (IQ2_XS and IQ2_S)",
+                                         "download_gb": 44.4, "ram_gb": 49, "arena_gb": 38.5,
+                                         "vram_beside_gb": 13.0, "shards": 1,
+                                         "file": "GLM-4.5-Air-UD-IQ2_M.gguf",
+                                         "memory_basis": "estimated from the file's tensors, not measured"},
+                            "UD-IQ2_XXS": {"about": "2-bit i-quant experts, mostly IQ2_XXS: the least RAM",
+                                           "download_gb": 42.7, "ram_gb": 47, "arena_gb": 36.8,
+                                           "vram_beside_gb": 13.0, "shards": 1,
+                                           "file": "GLM-4.5-Air-UD-IQ2_XXS.gguf",
+                                           "memory_basis": "estimated from the file's tensors, not measured"}},
+                 "sha256": {"GLM-4.5-Air-UD-Q4_K_XL-00001-of-00002.gguf":
+                            (49580287296, "1acd6d4acdb4f463c9a61696cb7e830e1a34134e610b573e87a4397adcd90bd7"),
+                            "GLM-4.5-Air-UD-Q4_K_XL-00002-of-00002.gguf":
+                            (18140784576, "8e220a3cdf4e19763cc7a5fd0a6215f1da1b3fda1306e64e88456d045c2007f8"),
+                            "GLM-4.5-Air-UD-Q3_K_XL-00001-of-00002.gguf":
+                            (49926035200, "1c24976f0ba51fcd5fc21365e82cf4d2b08d1be9de4247d2842e410a50fd4b2c"),
+                            "GLM-4.5-Air-UD-Q3_K_XL-00002-of-00002.gguf":
+                            (4859770400, "b145bbd431b0c4a6816094403286f8250b4581a7e39baf4f76b49244a4a489f4"),
+                            "GLM-4.5-Air-UD-IQ3_XXS-00001-of-00002.gguf":
+                            (49742530784, "6c9603e6a8db6effbc8dd6a5dd8d6f625f0d6c5ef7eabbff37f12d739cba590a"),
+                            "GLM-4.5-Air-UD-IQ3_XXS-00002-of-00002.gguf":
+                            (1702757440, "203a59c0c3a184adfce5f8454b1cdd3e63a7b90ddb010871d24d08c3cea402c8"),
+                            "GLM-4.5-Air-UD-Q2_K_XL.gguf":
+                            (47444888640, "609fe51f04b1a17941fb3549de50b6fa4137a32641ca23d88e7f1f12ad5deaef"),
+                            "GLM-4.5-Air-UD-IQ2_M.gguf":
+                            (44389321792, "33d80296f3b0ef0463985a6fe6dc2ad3a4260b09c549487623c1f35f7b6193fd"),
+                            "GLM-4.5-Air-UD-IQ2_XXS.gguf":
+                            (42682240064, "63158240af293e1b34eb2c4ed3a0256dce3a3324f55fbe141698c47fd4b4a7a8")}},
 }
 MMPROJ = "mmproj-Qwen3.8-Flash-Next-BF16.gguf"
 # Qwen3.6-35B-A3B (GGUF architecture qwen35moe), Unsloth's GGUFs with the MTP block: a family with an engine path of its
@@ -4371,7 +4433,7 @@ def sha256_matches(s: Path, size: int, sha: str) -> bool:
 # code by; the families not listed are qwen35moe
 POLY_GGUF_ARCHS = {"glm": ("glm5-next", "glm5next"), "deepseek": ("deepseek4",), "lfm25": ("lfm2moe",),
                    "gemma4": ("gemma4",), "flint": ("flint",), "kolibri": ("kolibri1",), "clover": ("clover_moe",),
-                   "inkling": ("inkling2_loop",)}
+                   "inkling": ("inkling2_loop",), "glm45air": ("glm4moe",)}
 
 
 def gguf_arch(s: Path) -> str:
@@ -10114,7 +10176,7 @@ def poly_verdict(d, ram, vram_gb, hip, windows=False) -> str:
 
 # --kv for a model of strata-poly (docs/Q8_KV.md): the formats its architecture's attention caches have beside
 # fp16, the default.  The other engine's own are STRATA_KV.
-POLY_KV = {"q8_0": ("qwen36", "ornith", "ornith122", "tiel", "minicpmv", "kolibri", "flint", "lfm25"),
+POLY_KV = {"q8_0": ("qwen36", "ornith", "ornith122", "tiel", "minicpmv", "kolibri", "flint", "lfm25", "glm45air"),
            "int8": ("gemma4",), "int8k": ("gemma4",)}
 STRATA_KV = ("int8", "q4_0", "k8v4")
 # the strata-poly families --kv-streaming on gives --kv-resident (their engine streams the attention caches from RAM)
@@ -10496,7 +10558,7 @@ def poly_setup(a, family, gpu, hip, cuda_tk, multi, ram, data, elsewhere, port, 
         warn(f"{title} on AMD cards on Windows: EXPERIMENTAL.  Setup compiles the HIP engine here (AMD's ROCm "
              "wheels), which has run Tiel Coder on an RX 9070 XT and Qwen3.6, Ornith, Tiel Coder and Gemma 4 on an "
              "RX 5700 XT, and nothing else yet; the log says where it stops if it does")
-    elif hip and family in ("glm", "deepseek", "flint", "kolibri", "clover"):   # the engine runs on AMD, these not yet
+    elif hip and family in ("glm", "deepseek", "flint", "kolibri", "clover", "glm45air"):   # the engine runs on AMD, these not yet
         warn(f"{title} on the AMD card has not been tried: the engine runs there, this model was not")
     if cuda_tk == 12:
         warn(f"{title}'s engine with CUDA 12 is compiled here (the ready-made one is CUDA 13)" +
@@ -12363,7 +12425,8 @@ def main() -> int:
                          "Qwen3.6-35B-A3B on strata-poly, groot = Groot 19B-A3B (experimental; docs/models/groot.md), "
                          "clover = Clover-35B-A3B-Preview, ornith = "
                          "Ornith 1.5, gemma4 = Gemma 4 26B-A4B, tiel = Tiel Coder 35B-A3B, minicpmv = MiniCPM-V 4.7 "
-                         "35B-A3B, ornith122 = Ornith 1.5 122B (docs/BACKENDS.md), inkling = Inkling 2 Mini (experimental, text "
+                         "35B-A3B, ornith122 = Ornith 1.5 122B (docs/BACKENDS.md), glm45air = GLM-4.5-Air (experimental; "
+                         "docs/GLM45AIR.md), inkling = Inkling 2 Mini (experimental, text "
                          "only; docs/models/inkling.md), qwen36-strata = Qwen3.6-35B-A3B on the Strata project's "
                          "own engine (UD-Q4_K_XL and up, 32 GB of RAM or more; pictures with --vision, several "
                          "requests at once with --parallel; docs/QWEN36.md), hy4-flash = Tencent Hy4-Flash on the Strata "
