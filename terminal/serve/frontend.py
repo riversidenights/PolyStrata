@@ -2924,10 +2924,12 @@ class OutputParser:
                 self._reset_track()                               # the answer's own text starts here
             elif self.state == "content":
                 if self.opening:                                # the model's own opening of its reasoning
-                    if self.buf.startswith(self.think_open):
-                        self.buf, self.state, self.opening = self.buf[len(self.think_open):], "reasoning", False
+                    # GLM-4.5 writes a newline before it (its template: `<|assistant|>\n<think>`)
+                    head = self.buf.lstrip("\n")
+                    if head.startswith(self.think_open):
+                        self.buf, self.state, self.opening = head[len(self.think_open):], "reasoning", False
                         continue
-                    if self.think_open.startswith(self.buf):
+                    if self.think_open.startswith(head):
                         return out
                     self.opening = False
                 for tag in self.noise:

@@ -83,6 +83,22 @@ class Reasoning(unittest.TestCase):
                 self.assertEqual("".join(e.text for e in evs if e.kind == "reasoning"), 'so I should just say "Paris."')
                 self.assertEqual("".join(e.text for e in evs if e.kind == "content"), "Paris")
 
+    def test_glm45_opens_its_thinking_after_a_newline(self):
+        # GLM-4.5's prompt ends on <|assistant|> and the model writes "\n<think>" itself (its template's own layout)
+        text = "\n<think>do I like waffles?</think>\nYes."
+        for size in (1, 3, len(text)):
+            with self.subTest(size=size):
+                p = OutputParser(thinking=True, call_format="glm", opened=False)
+                evs = [e for i in range(0, len(text), size) for e in p.feed(text[i:i + size])] + p.finish()
+                self.assertEqual("".join(e.text for e in evs if e.kind == "reasoning"), "do I like waffles?")
+                self.assertEqual("".join(e.text for e in evs if e.kind == "content"), "Yes.")
+
+    def test_a_reply_that_only_starts_with_a_newline_is_content(self):
+        p = OutputParser(thinking=True, call_format="glm", opened=False)
+        evs = [e for ch in "\nHello" for e in p.feed(ch)] + p.finish()
+        self.assertEqual("".join(e.text for e in evs if e.kind == "content"), "Hello")
+        self.assertFalse([e for e in evs if e.kind == "reasoning"])
+
 
 class GlmTokens(ByteTokenizer):
     SPECIALS = ["<|endoftext|>", "<|user|>", "<|observation|>", "<|assistant|>"]
