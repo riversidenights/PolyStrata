@@ -41,7 +41,9 @@ SUPPORTED_SELECTIONS = frozenset({"qwen/Q2_0", "qwen/IQ2_XS", "qwen/IQ3_XXS", "q
                                    # round 0214: Unsloth's v3.1 sets (revision d9620119); the v3.1 UD-IQ4_XS has its own name, its Hub file names are UD-IQ4_XS's with four shards
                                    "unsloth/UD-IQ1_M", "unsloth/UD-Q2_0", "unsloth/UD-IQ2_XS", "unsloth/UD-Q2_K_XL", "unsloth/UD-IQ3_XXS",
                                    "unsloth/UD-Q3_K_XL", "unsloth/UD-IQ4_XS-v31",
-                                   "unsloth/Q8_0", "gyro/Gyro-S", "gyro/Gyro-M"})
+                                   "unsloth/Q8_0", "gyro/Gyro-S", "gyro/Gyro-M",
+                                   # UltimateIntent's BigFreakyGoon-9000 (setup.py GOON_FILES): one file per size
+                                   "bigfreakygoon/BFG-IQ3_XXS", "bigfreakygoon/BFG-Q4_K_M", "bigfreakygoon/BFG-Q6_K", "bigfreakygoon/BFG-Q8_0"})
 
 
 def _poly_table_selections() -> frozenset:

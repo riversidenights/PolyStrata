@@ -215,6 +215,66 @@
   ],
   "repo": "agentionai/Qwen3.8-Flash-Next-Gyro-GGUF"
  },
+ "bigfreakygoon/BFG-IQ3_XXS": {
+  "arch": "qwen4exp",
+  "tensors": 1224,
+  "bytes": 88384145920,
+  "expert_bytes": {
+   "IQ3_XXS": 30828134400,
+   "IQ4_NL": 22649241600
+  },
+  "experts_bpw": 3.542,
+  "bpw": 3.996,
+  "files": [
+   "BigFreakyGoon-9000-IQ3_XXS.gguf"
+  ],
+  "repo": "UltimateIntent/BigFreakyGoon9000-GGUF"
+ },
+ "bigfreakygoon/BFG-Q4_K_M": {
+  "arch": "qwen4exp",
+  "tensors": 1224,
+  "bytes": 119139699200,
+  "expert_bytes": {
+   "Q4_K": 45298483200,
+   "Q5_0": 13841203200,
+   "Q8_0": 21390950400
+  },
+  "experts_bpw": 5.333,
+  "bpw": 5.387,
+  "files": [
+   "BigFreakyGoon-9000-Q4_K_M.gguf"
+  ],
+  "repo": "UltimateIntent/BigFreakyGoon9000-GGUF"
+ },
+ "bigfreakygoon/BFG-Q6_K": {
+  "arch": "qwen4exp",
+  "tensors": 1224,
+  "bytes": 167628815360,
+  "expert_bytes": {
+   "Q6_K": 66060288000,
+   "Q8_0": 42781900800
+  },
+  "experts_bpw": 7.208,
+  "bpw": 7.579,
+  "files": [
+   "BigFreakyGoon-9000-Q6_K.gguf"
+  ],
+  "repo": "UltimateIntent/BigFreakyGoon9000-GGUF"
+ },
+ "bigfreakygoon/BFG-Q8_0": {
+  "arch": "qwen4exp",
+  "tensors": 1224,
+  "bytes": 188213926400,
+  "expert_bytes": {
+   "Q8_0": 128345702400
+  },
+  "experts_bpw": 8.5,
+  "bpw": 8.51,
+  "files": [
+   "BigFreakyGoon-9000-Q8_0.gguf"
+  ],
+  "repo": "UltimateIntent/BigFreakyGoon9000-GGUF"
+ },
  "unsloth/UD-Q5_K_XL": {
   "arch": "qwen4exp",
   "tensors": 1224,
