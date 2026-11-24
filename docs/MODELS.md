@@ -171,6 +171,30 @@ On an RTX 3060 12 GB and an R9700, Gyro-M decodes 16 to 21% slower than Q2_0. De
 START-HERE.bat --setup --family gyro --model Gyro-S        # Linux and Mac: ./setup.sh --setup ...
 ```
 
+<a id="bigfreakygoon"></a>
+
+### BigFreakyGoon-9000 (UltimateIntent, roleplay)
+
+`--family bigfreakygoon` is UltimateIntent's fine-tune of Qwen3.8-Flash-Next for roleplay and stories. It is
+uncensored and writes adult (NSFW) content. It is never setup's default. Each size is one file with the n-gram table
+inside it. Setup reads it in place, like Unsloth's files: every expert in RAM where they fit, else a RAM budget of them
+and the rest read from the SSD.
+
+| `--model` | Download | Experts | In plain words |
+| --- | ---: | ---: | --- |
+| **BFG-IQ3_XXS** | 88.4 GB | 53.5 GB | 3-bit i-quant, the smallest |
+| **BFG-Q4_K_M** | 119.2 GB | 80.5 GB | 4-bit, the pick from 48 GB of RAM |
+| **BFG-Q6_K** | 167.6 GB | 108.8 GB | 6-bit |
+| **BFG-Q8_0** | 188.2 GB | 128.3 GB | 8-bit throughout, for a 192 GB PC |
+
+The repository's Q2_K and Q3_K_M files are not offered: the engine has no expert kernels for their Q2_K and Q3_K
+experts. The draft layer (MTP) is the original model's. It reads pictures with the repository's own picture reader.
+Not measured yet: no speed or quality numbers. The sizes and tensor types come from the files' headers.
+
+```sh
+START-HERE.bat --setup --family bigfreakygoon --model BFG-Q4_K_M        # Linux: ./setup.sh --setup ...
+```
+
 <a id="nvfp4"></a><a id="nvfp4-qad"></a>
 
 ### NVFP4 (NVIDIA cards)

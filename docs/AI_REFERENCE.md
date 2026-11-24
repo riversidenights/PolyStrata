@@ -27,7 +27,7 @@ The installer's `--family` names (`START-HERE.bat --help`). Each model's sizes, 
 
 | Family | Engine | `--family` | Guide |
 | --- | --- | --- | --- |
-| Qwen3.8-Flash-Next and its variants (Coder, Swift 1.5, Unsloth, Gyro, NVFP4) | `strata` | `qwen`, `coder`, `swift`, `unsloth`, `gyro`, `nvfp4` | [qwen38.md](models/qwen38.md), [MODELS.md](MODELS.md) |
+| Qwen3.8-Flash-Next and its variants (Coder, Swift 1.5, Unsloth, Gyro, NVFP4, BigFreakyGoon-9000) | `strata` | `qwen`, `coder`, `swift`, `unsloth`, `gyro`, `nvfp4`, `bigfreakygoon` | [qwen38.md](models/qwen38.md), [MODELS.md](MODELS.md) |
 | GLM 5.3 Flash | `strata-poly` | `glm` | [glm.md](models/glm.md) |
 | DeepSeek V4 Flash | `strata-poly` | `deepseek` | [deepseek.md](models/deepseek.md) |
 | LFM2.5-24B-A2B | `strata-poly` | `lfm25` | [lfm25.md](models/lfm25.md) |
@@ -42,7 +42,7 @@ The installer's `--family` names (`START-HERE.bat --help`). Each model's sizes, 
 | Ornith 1.5 122B (offered, not in the README's list) | `strata-poly` | `ornith122` | [ORNITH.md](ORNITH.md) |
 | Qwen3.6-35B-A3B on the Strata project's engine | `strata` | `qwen36-strata` | [QWEN36.md](QWEN36.md) |
 
-Coder, Swift, Gyro, NVFP4 and OrcaRouter are Qwen3.8-Flash-Next variants, not separate models. `qwen36` and
+Coder, Swift, Gyro, NVFP4, BigFreakyGoon-9000 and OrcaRouter are Qwen3.8-Flash-Next variants, not separate models. `qwen36` and
 `qwen36-strata` are the same model on the two engines ([BACKENDS.md](BACKENDS.md#qwen36-on-two-engines)).
 
 The two families of the Strata project's engine ([CAPABILITIES.md](CAPABILITIES.md) says what its packages are):
@@ -82,6 +82,7 @@ models of `strata-poly` are in the README's "Which model should I pick?" table a
 | Qwen3.8-Flash-Next | Gyro / agentionai | `gyro` | Gyro-S, Gyro-M; backend-specific validation in [GYRO.md](GYRO.md) |
 | Qwen3.8-Flash-Next | Swift 1.5 / UkisAI | `swift` | IQ2_XS, IQ3_XXS, IQ3_S; a fine-tune, not just a quantization |
 | Qwen3.8-Flash-Next | NVFP4 | `nvfp4` | NVFP4, NVFP4-NVIDIA, NVFP4-QAD; NVIDIA only |
+| Qwen3.8-Flash-Next | BigFreakyGoon-9000 / UltimateIntent | `bigfreakygoon` | BFG-IQ3_XXS, BFG-Q4_K_M, BFG-Q6_K, BFG-Q8_0; a roleplay fine-tune with adult content, only on explicit request; not measured ([MODELS.md](MODELS.md#bigfreakygoon)) |
 | Qwen3.8-Flash-Next | OrcaRouter Uncensored | Manual conversion | IQ3_XXS; not an installer menu choice ([ORCA.md](ORCA.md)) |
 | Qwen3.6-35B-A3B | Unsloth, on `strata-poly` | `qwen36` | UD-Q3_K_M, UD-Q2_K_XL, UD-Q4_K_M |
 | Qwen3.6-35B-A3B | Unsloth, on the Strata project's engine | `qwen36-strata` | UD-Q4_K_XL, UD-Q6_K_XL, Q8_0 |

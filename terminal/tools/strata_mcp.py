@@ -114,6 +114,15 @@ FALLBACK_MODELS = {
                "engine": (0, 1, 45, 1),
                "download_gb": 92.0, "ram_gb": 35.0, "arena_gb": 32.1, "families": ("gyro",), "mem_total": True,
                "vision": True},
+    # BigFreakyGoon-9000, UltimateIntent's roleplay fine-tune (setup.py GOON_FILES): one file per size, read in place with a RAM budget
+    "BFG-IQ3_XXS": {"about": "3-bit i-quant, the smallest", "download_gb": 88.4, "ram_gb": 48, "arena_gb": 53.5,
+                    "families": ("bigfreakygoon",), "budget": True, "vision": True},
+    "BFG-Q4_K_M": {"about": "4-bit (K-quant), the pick from 48 GB of RAM", "download_gb": 119.2, "ram_gb": 48, "arena_gb": 80.5,
+                   "families": ("bigfreakygoon",), "budget": True, "vision": True},
+    "BFG-Q6_K": {"about": "6-bit (K-quant)", "download_gb": 167.6, "ram_gb": 118, "arena_gb": 108.8,
+                 "families": ("bigfreakygoon",), "budget": True, "vision": True},
+    "BFG-Q8_0": {"about": "8-bit throughout; for a 192 GB PC", "download_gb": 188.2, "ram_gb": 136, "arena_gb": 128.3,
+                 "families": ("bigfreakygoon",), "budget": True, "vision": True},
     "NVFP4": {"about": "4-bit NVFP4 experts, GPTQ (sergqwer's strata-nvfp4 pack); RTX 50 has FP4 tensor cores, other "
                        "NVIDIA cards run it at 8-bit precision", "download_gb": 128.0, "ram_gb": 80, "arena_gb": 68.0,
               "families": ("nvfp4",), "vision": True},
@@ -142,6 +151,9 @@ FALLBACK_FAMILIES = {
     "nvfp4": {"title": "Qwen3.8-Flash-Next (NVFP4)", "about": "4-bit NVFP4 experts, NVIDIA cards; a 128 GB download, "
                                                               "~80 GB of RAM to keep every expert in RAM",
               "tag": "nvfp4-"},
+    "bigfreakygoon": {"title": "BigFreakyGoon-9000", "about": "for roleplay and stories; uncensored, writes adult (NSFW) content; 88 to "
+                                                              "188 GB downloads, read in place as Unsloth's files are",
+                      "tag": "bigfreakygoon-", "vision": True, "experimental": True},
     "glm": {"title": "GLM 5.3 Flash", "about": "another model, with its own engine: Linux, one NVIDIA card (run on "
                                                "32 GB), 64-128 GB of RAM", "tag": "glm-", "engine": "poly",
             "vision": False, "experimental": True},

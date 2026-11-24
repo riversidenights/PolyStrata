@@ -147,6 +147,7 @@ HF_REVISIONS = {
     "unsloth/Ornith-1.5-122B-GGUF": "3842d003341507c216295c6f28dfcd30349925c6",                          # 2026-10-20
     "ornith-ai/Ornith-1.5-122B": "dfa07bab90e90746ffbfc0b0cba3126eb9265de2",                              # 2026-10-20
     "agentionai/Qwen3.8-Flash-Next-Gyro-GGUF": "1ada08422e404aca51ab9df665f089f34c419c6b",           # 2026-10-13
+    "UltimateIntent/BigFreakyGoon9000-GGUF": "b66e09ac0e2c9bfb7282d75271eee8bb9a105af3",             # 2026-11-24
     "bartowski/GrootTeam_Groot-19B-A3B-261023-GGUF": "0025df0d03fb385344394f4e5afd73ce47da0680",
     "unsloth/GLM-4.5-Air-GGUF": "506d64aa8c5cfe9dbbf00bc7a15739438f83204d",                              # 2025-12-25
 }
@@ -432,6 +433,27 @@ GYRO_FILES = {
         (91965774272, "7aa36d15131d255179ab6c87fa9c9f81a0b541fc9e81e959d4c3e29eb20feb5f"),
 }
 
+# UltimateIntent's BigFreakyGoon-9000: a roleplay and fiction fine-tune of Qwen3.8-Flash-Next (abliterated, then a LoRA on the attention and
+# shared-expert projections of layers 22-47, merged before the GGUFs were made).  One GGUF per size with the n-gram table inside it, read in
+# place like Unsloth's sets (the RAM-budget mode, "budget" in MODELS).  The sizes and SHA-256 are the Hub's LFS pointers at the revision in
+# HF_REVISIONS.  From the GGUF headers (general.architecture qwen4exp, 1224 tensors, the published layout), gate/up and down experts:
+# IQ3_XXS IQ3_XXS/IQ4_NL, Q4_K_M Q4_K/Q8_0 or Q5_0, Q6_K Q6_K/Q8_0, Q8_0 Q8_0/Q8_0 - all in STRATA_GU_FMTS / STRATA_D_FMTS.  The repository's
+# Q2_K and Q3_K_M are not offered: their Q2_K and Q3_K gate/up experts have no grouped expert kernel (strata_control/q36_types.py
+# EXPERT_GATE_UP), and BF16 is 354 GB.  arena_gb: the bytes of the *_exps tensors in each header; table_gb: per_layer_token_embd.weight's
+# (IQ4_NL in IQ3_XXS, Q5_0 in Q4_K_M, Q8_0 in Q6_K and Q8_0), read from the SSD like every Flash-Next n-gram table (strata_control/fit_label.py).
+GOON_REPO = "UltimateIntent/BigFreakyGoon9000-GGUF"
+GOON_FILES = {
+    "BigFreakyGoon-9000-IQ3_XXS.gguf":
+        (88395168928, "e9f41d27a979dbad8ab62e08367adfb99bea743deeed7859ba8176c01012078c"),
+    "BigFreakyGoon-9000-Q4_K_M.gguf":
+        (119150722208, "3a2e206298239c4992625ffc43231c56c56d1d97300a852412abe3b30bffa82a"),
+    "BigFreakyGoon-9000-Q6_K.gguf":
+        (167639838368, "a5cc90c6f6b2df6f88939d84cb0937a0fd757075b2093072fe0d2dd1f8a2e633"),
+    "BigFreakyGoon-9000-Q8_0.gguf":
+        (188224949408, "37c50c23106be35e003b72bab2d88941ac35fece968f3e0fe0724b66fad81faa"),
+}
+GOON_MMPROJ = ("BigFreakyGoon-9000-mmproj-BF16.gguf", (907543008, "b7f8e3efbdf9f6e685fdf1a2b02dc8cf32fa9074e6ab90d4672303bbb33b3ec9"))
+
 # ISTA-DASLab's Qwen3.8-Flash-Next shards (Q2_0, IQ2_XS, IQ3_XXS, IQ3_S) and the picture reader at the revision pinned in HF_REVISIONS: name -> (bytes, sha256),
 # the Hub's LFS pointers (tools/hf_pin_fetch.py).  The n-gram table (shard 2) is the same file for all four sizes.
 ISTA_FILES = {
@@ -607,6 +629,20 @@ MODELS = {
                         "about 16-21% slower than Q2_0 on 12 GB cards",
                "download_gb": 92.0, "ram_gb": 35.0, "arena_gb": 32.1, "families": ("gyro",), "mem_total": True,
                "file": "Qwen3.8-Flash-Next-Gyro-M-TQ2_0.gguf", "shards": 1, "engine": GYRO_ENGINE, "vision": True},
+    # BigFreakyGoon-9000 (GOON_FILES): one file per size, read in place with a RAM budget of its experts, as Unsloth's.  "ram_gb": Unsloth's floor
+    # for the RAM-budget mode up to 4-bit (48, UNSLOTH_MIN_RAM_GB below), and for Q6_K / Q8_0 the figure of the Unsloth set with the same expert bytes.
+    "BFG-IQ3_XXS": {"about": "3-bit i-quant, the smallest", "download_gb": 88.4, "ram_gb": 48, "arena_gb": 53.5,
+                    "families": ("bigfreakygoon",), "budget": True, "quant": "IQ3_XXS", "shards": 1, "table_gb": 28.8,
+                    "file": "BigFreakyGoon-9000-{q}.gguf", "engine": UNSLOTH_V31_ENGINE, "vision": True},
+    "BFG-Q4_K_M": {"about": "4-bit (K-quant), the pick from 48 GB of RAM", "download_gb": 119.2, "ram_gb": 48, "arena_gb": 80.5,
+                   "families": ("bigfreakygoon",), "budget": True, "quant": "Q4_K_M", "shards": 1, "table_gb": 35.2,
+                   "file": "BigFreakyGoon-9000-{q}.gguf", "engine": UNSLOTH_V31_ENGINE, "vision": True},
+    "BFG-Q6_K": {"about": "6-bit (K-quant)", "download_gb": 167.6, "ram_gb": 118, "arena_gb": 108.8,
+                 "families": ("bigfreakygoon",), "budget": True, "quant": "Q6_K", "shards": 1, "table_gb": 54.4,
+                 "file": "BigFreakyGoon-9000-{q}.gguf", "engine": UNSLOTH_V31_ENGINE, "vision": True},
+    "BFG-Q8_0": {"about": "8-bit throughout; for a 192 GB PC", "download_gb": 188.2, "ram_gb": 136, "arena_gb": 128.3,
+                 "families": ("bigfreakygoon",), "budget": True, "quant": "Q8_0", "shards": 1, "table_gb": 54.4,
+                 "file": "BigFreakyGoon-9000-{q}.gguf", "engine": UNSLOTH_V31_ENGINE, "vision": True},
     "NVFP4": {"about": "best quality of the NVFP4 versions (GPTQ, sergqwer's strata-nvfp4 pack); RTX 50 has FP4 tensor cores, "
                        "other NVIDIA cards run it at 8-bit precision", "download_gb": 128.0, "ram_gb": 80, "arena_gb": 68.0,
               "families": ("nvfp4",), "nvidia_only": True, "vision": True, "repo": NVFP4_GPTQ_REPO,
@@ -824,6 +860,15 @@ FAMILIES = {
               "tag": "nvfp4-", "name": "qwen3.8-flash-next-nvfp4", "ready": True,
               "mmproj_hf": hf("ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF"), "mmproj": "mmproj-Qwen3.8-Flash-Next-BF16.gguf",
               "mmproj_sha256": (907543008, "b1a82259702816a5330d7bd7607cd9676b11780e79ff7348c21103ff3ce49bd0")},
+    # UltimateIntent's roleplay fine-tune (GOON_FILES): after the regular families, never the default; the draft layer (MTP) is the original's,
+    # as for every Flash-Next family.  Its own picture reader: the same size as ISTA's, other bytes, so it is pinned and fetched on its own.
+    "bigfreakygoon": {"title": "BigFreakyGoon-9000", "by": "UltimateIntent's roleplay fine-tune of Qwen3.8-Flash-Next",
+                      "about": "for roleplay and stories; uncensored, writes adult (NSFW) content; 88 to 188 GB downloads, read in place as "
+                               "Unsloth's files are",
+                      "hf": hf(GOON_REPO), "file": "BigFreakyGoon-9000-{q}.gguf", "shards": 1, "tag": "bigfreakygoon-",
+                      "name": "bigfreakygoon-9000", "vision": True, "pack_args": ["--compat-bf16"], "experimental": True,
+                      "mmproj_hf": hf(GOON_REPO), "mmproj": GOON_MMPROJ[0], "mmproj_sha256": GOON_MMPROJ[1], "sha256": GOON_FILES,
+                      "license": "Qwen Community License 1.0 (Qwen3.8-Flash-Next's): https://huggingface.co/UltimateIntent/BigFreakyGoon9000-GGUF"},
     # GLM 5.3 Flash: another architecture (llama.cpp's glm5-next), run by strata-poly from its one GGUF - no pack,
     # no image encoder.  "engine": its setup is poly_setup, not main()'s steps (docs/GLM.md).  "draft": the model's
     # draft block in the data folder, one for every size whose file has none (tools/glm_draft_fetch.py)
@@ -1429,6 +1474,7 @@ REPO_PINS = {
     UNSLOTH_REPO: {**UNSLOTH_V31_SHARDS, **UNSLOTH_SHARDS, **UNSLOTH_IQ4_XS_SHARDS, **UNSLOTH_BIG_SHARDS},
     "unsloth/Qwen3.6-35B-A3B-MTP-GGUF": QWEN36_FILES,
     "agentionai/Qwen3.8-Flash-Next-Gyro-GGUF": GYRO_FILES,
+    GOON_REPO: {**GOON_FILES, GOON_MMPROJ[0]: GOON_MMPROJ[1]},
 }
 # the files of a repository at a commit other than HF_REVISIONS' (UNSLOTH_V31_REVISION): (repository, commit) -> name -> (bytes, sha256); file_pin looks here first
 REV_PINS = {(UNSLOTH_REPO, UNSLOTH_V31_REVISION): {**UNSLOTH_V31_SHARDS, **UNSLOTH_Q4_V31_SHARDS}}
@@ -2973,6 +3019,10 @@ def budget_model(cfg: dict) -> str:
     a = cfg.get("args", [])
     native = Path(a[a.index("--native") + 1]).name.upper() if "--native" in a and a.index("--native") + 1 < len(a) \
         else ""
+    own = [m for m, d in MODELS.items() if d.get("budget") and any(f in FAMILIES and native == model_file(FAMILIES[f], m, 1).upper()
+                                                                    for f in d.get("families", ()))]
+    if len(own) == 1:                                  # the published first file by its whole name (one-file sets such as BigFreakyGoon-9000's)
+        return own[0]
     mine = [m for m, d in MODELS.items() if d.get("budget") and f"-{model_quant(m).upper()}-" in native]
     if len(mine) > 1:                                  # the pinned UD-IQ4_XS (three shards) and the v3.1 one (four): the shard count in the name tells them apart
         count = re.search(r"-OF-(\d{5})\.GGUF$", native)
@@ -4241,7 +4291,7 @@ GGUF_QUANT = re.compile(r"(?<![A-Za-z0-9])((?:UD-)?(?:I?Q\d+(?:_[A-Za-z0-9]+)*|B
                         r"(?=-\d{5}-of-\d{5}\.gguf$|\.gguf$)", re.I)
 SUPPORTED_GGUFS = ("PolyStrata runs ISTA-DASLab's GSQ-RCO files (Qwen3.8-Flash-Next Q2_0, IQ2_XS, IQ3_XXS, IQ3_S; Swift "
                    "1.5's; the Coder's IQ1_M) and Unsloth's UD-IQ1_M, UD-Q2_0, UD-IQ2_XS, UD-Q2_K_XL, UD-IQ3_XXS, UD-Q3_K_XL, "
-                   "UD-IQ4_XS, UD-Q4_K_XL, UD-Q5_K_XL, UD-Q6_K_XL and Q8_0 only: other GGUFs (Unsloth's UD-IQ1_S, other "
+                   "UD-IQ4_XS, UD-Q4_K_XL, UD-Q5_K_XL, UD-Q6_K_XL and Q8_0, and BigFreakyGoon-9000's IQ3_XXS, Q4_K_M, Q6_K and Q8_0 only: other GGUFs (Unsloth's UD-IQ1_S, other "
                    "K-quant files) cannot be used")
 # why a GGUF of a name PolyStrata knows is still refused (said beside SUPPORTED_GGUFS)
 UNSUPPORTED_WHY = {"UD-IQ1_S": "UD-IQ1_S mixes two expert formats in one layer, which PolyStrata cannot load; UD-IQ1_M is the 1-bit choice"}
@@ -4250,7 +4300,9 @@ UNSUPPORTED_WHY = {"UD-IQ1_S": "UD-IQ1_S mixes two expert formats in one layer, 
 def gguf_unsupported(name: str) -> str | None:
     """#444: the quantization a GGUF's name says, when it is one PolyStrata cannot run (not a setup size); else None."""
     m = GGUF_QUANT.search(name)
-    return m.group(1) if m and m.group(1).upper() not in MODELS and not name.lower().startswith("mmproj") else None
+    if m is None or name.lower().startswith("mmproj") or gguf_choice(name):     # a published file of a size setup offers (BigFreakyGoon-9000-Q4_K_M.gguf)
+        return None
+    return m.group(1) if m.group(1).upper() not in MODELS else None
 
 
 def gguf_choice(name: str) -> tuple | None:
@@ -5315,7 +5367,8 @@ STRIX_HALO_FAMILY, STRIX_HALO_MODEL = "unsloth", "UD-IQ4_XS"    # the model docs
 STRIX_HALO_MIN_GB = 80         # UD-IQ4_XS keeps all of its experts in memory from ~80 GB (its menu line says so)
 
 
-RECOMMENDED_SIZES = {"qwen": ("IQ3_S",), "swift": ("IQ3_S",), "unsloth": ("UD-Q4_K_XL", "UD-IQ4_XS")}   # owner's pick, 0.1.44
+RECOMMENDED_SIZES = {"qwen": ("IQ3_S",), "swift": ("IQ3_S",), "unsloth": ("UD-Q4_K_XL", "UD-IQ4_XS"),   # owner's pick, 0.1.44
+                     "bigfreakygoon": ("BFG-Q4_K_M", "BFG-IQ3_XXS")}       # as Unsloth's: the 4-bit file from 48 GB of RAM, else the smallest
 
 
 def mem_have(model: str, ram: float, vram: float = 0.0) -> float:
@@ -12420,7 +12473,9 @@ def main() -> int:
             fail(f"{FEED_UNAVAILABLE[_peek('--family')]['title']} is {FEED_UNAVAILABLE[_peek('--family')]['reason']}")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--family", choices=list(FAMILIES) + list(PREVIEW_FAMILIES) + list(HY4_FAMILIES),
-                    help="qwen = Qwen3.8-Flash-Next, swift = Swift 1.5, glm = GLM 5.3 Flash (docs/GLM.md), deepseek = "
+                    help="qwen = Qwen3.8-Flash-Next, swift = Swift 1.5, bigfreakygoon = BigFreakyGoon-9000 (a roleplay "
+                         "fine-tune of Qwen3.8-Flash-Next, adult content; --model BFG-IQ3_XXS, BFG-Q4_K_M, BFG-Q6_K or "
+                         "BFG-Q8_0), glm = GLM 5.3 Flash (docs/GLM.md), deepseek = "
                          "DeepSeek V4 Flash, lfm25 = LFM2.5-24B-A2B, flint = Flint 40B-A2.5B, qwen36 = "
                          "Qwen3.6-35B-A3B on strata-poly, groot = Groot 19B-A3B (experimental; docs/models/groot.md), "
                          "clover = Clover-35B-A3B-Preview, ornith = "

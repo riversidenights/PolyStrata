@@ -20,6 +20,7 @@ SLOWER = "may run slower"
 #   nvfp4 NVFP4-QAD: its 102.2 GB download is NVIDIA's checkpoint, which this PC converts into the pack that runs; the files that run are the converted pack, the same
 #     size as the other NVFP4 sets (128.0 - 51.2 = 76.8 GB), so that figure is used (owner's rule: the model files that run, minus the table)
 #   gyro: the table is inside the one GGUF; the catalog states the rest (its `ram_gb`: 27.6 / 35 GB), the table is the difference
+#   bigfreakygoon: the table is inside the one GGUF, its size is the entry's own `table_gb` (per_layer_token_embd.weight in each header)
 #   qwen36 (its own path) has none.  A family this module does not know counts its whole download.
 _GB = 1e9
 _TABLE_BYTES = {"qwen": 28_800_138_432, "swift": 28_800_138_432, "coder": 28_800_138_432, "unsloth": 28_800_138_432, "nvfp4": 51_200_246_176}
@@ -29,7 +30,9 @@ _PACK_GB = {("nvfp4", "NVFP4-QAD"): 76.8}        # sets whose download is not th
 
 
 def table_gb(family: str | None, model: str | None, d: dict) -> float:
-    """The size of the lookup table's file, in GB, of one catalog entry `d` (download_gb, ram_gb, mem_total)."""
+    """The size of the lookup table's file, in GB, of one catalog entry `d` (download_gb, ram_gb, mem_total, table_gb)."""
+    if d.get("table_gb") is not None:                  # the entry says it (one file with the table inside: BigFreakyGoon-9000's sizes)
+        return float(d["table_gb"])
     if d.get("mem_total") or family == "gyro":
         return max(0.0, float(d["download_gb"]) - float(d["ram_gb"]))
     if family == "unsloth" and model in _BIG_UNSLOTH:
