@@ -497,12 +497,12 @@ def configured_pin_dir(cfg: dict) -> str | None:
     return None
 
 
-_INKLING_Q2_RE = re.compile(r"(?:^|[^a-z0-9])q2(?:[_\-.]|$)", re.IGNORECASE)
+_INKLING_Q2_RE = re.compile(r"(?:^|[^a-z0-9])i?q[12](?:[_\-.]|$)", re.IGNORECASE)   # setup.py's
 
 
 def inkling_default_effort(model_name: str | None = None, model_path: str | None = None):
     """Default reasoning_effort for Inkling 2 Mini when neither client nor config sets one:
-    "low" (0.2) for Q2 quantizations (e.g. UD-Q2_K_XL) and 0.4 for Q3/Q4 and other sizes."""
+    "low" (0.2) for 1- and 2-bit quantizations (e.g. UD-Q2_K_XL, GSQ-RCO-IQ2_S) and 0.4 for Q3/Q4 and other sizes."""
     for text in (model_name, Path(str(model_path)).name if model_path else ""):
         if text and _INKLING_Q2_RE.search(str(text)):
             return "low"

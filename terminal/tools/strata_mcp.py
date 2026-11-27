@@ -166,9 +166,19 @@ FALLBACK_FAMILIES = {
                                   "download_gb": 25.5, "ram_gb": 31, "arena_gb": 24.4}}},
     "inkling": {"title": "Inkling 2 Mini",
                 "about": "experimental, on the strata-poly engine: one NVIDIA card, Linux or Windows, or a Mac (beta); "
-                         "AMD cards are not ready (docs/models/inkling.md); reads pictures; a 17.6 GB file, or 13.6 or 9.1 GB",
+                         "AMD cards are not ready (docs/models/inkling.md); reads pictures; an 11.4 GB GSQ-RCO file "
+                         "by default, 9.0 to 17.6 GB in all",
                 "tag": "inkling-", "engine": "poly", "vision": True, "experimental": True,
-                "models": {"UD-Q4_K_XL": {"about": "4-bit experts (NVFP4, Unsloth Dynamic), 8-bit where they write, and DSpark drafter",
+                "models": {"GSQ-RCO-IQ3_S": {"about": "ISTA-DASLab's GSQ-RCO, 1- to 3-bit experts and 4- to 8-bit "
+                                                      "attention mixed by tensor: 99.2% of the model's scores, and DSpark drafter",
+                                             "download_gb": 11.8, "ram_gb": 15, "arena_gb": 9.523297792},
+                           "GSQ-RCO-Q2_K_XL": {"about": "GSQ-RCO, smaller: 98.0% of the model's scores, and DSpark drafter",
+                                               "download_gb": 10.2, "ram_gb": 13, "arena_gb": 7.962624},
+                           "GSQ-RCO-IQ3_XXS": {"about": "GSQ-RCO between the two: 97.7% of the model's scores, and DSpark drafter",
+                                               "download_gb": 11.0, "ram_gb": 14, "arena_gb": 8.758886},
+                           "GSQ-RCO-IQ2_S": {"about": "GSQ-RCO, the smallest: 94.3% of the model's scores, and DSpark drafter",
+                                             "download_gb": 9.4, "ram_gb": 12, "arena_gb": 7.235371},
+                           "UD-Q4_K_XL": {"about": "4-bit experts (NVFP4, Unsloth Dynamic), 8-bit where they write, and DSpark drafter",
                                           "download_gb": 18.0, "ram_gb": 21, "arena_gb": 15.797846016},
                            "UD-Q3_K_XL": {"about": "3-bit i-quant and 4-bit experts mixed, and DSpark drafter",
                                           "download_gb": 14.0, "ram_gb": 17, "arena_gb": 12.198739968},

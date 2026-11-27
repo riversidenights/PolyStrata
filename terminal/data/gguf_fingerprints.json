@@ -879,6 +879,74 @@
    ]
   }
  },
+ "inkling/GSQ-RCO-IQ3_S": {
+  "engine": "strata-poly",
+  "archs": [
+   "inkling2_loop",
+   "inkling2"
+  ],
+  "files": [
+   "Inkling-2-Mini-GSQ-RCO-IQ3_S.gguf"
+  ],
+  "repo": "ISTA-DASLab/Inkling-2-Mini-GSQ-RCO-GGUF",
+  "pins": {
+   "Inkling-2-Mini-GSQ-RCO-IQ3_S.gguf": [
+    11425259648,
+    "8a3515374c3cd9b65a1677b17e805bb1e32df8e98756e5f0d2fe1837d62aa4cb"
+   ]
+  }
+ },
+ "inkling/GSQ-RCO-Q2_K_XL": {
+  "engine": "strata-poly",
+  "archs": [
+   "inkling2_loop",
+   "inkling2"
+  ],
+  "files": [
+   "Inkling-2-Mini-GSQ-RCO-Q2_K_XL.gguf"
+  ],
+  "repo": "ISTA-DASLab/Inkling-2-Mini-GSQ-RCO-GGUF",
+  "pins": {
+   "Inkling-2-Mini-GSQ-RCO-Q2_K_XL.gguf": [
+    9792516224,
+    "df264db473adf61660f1968726646a73599e295e882d6a120f675363bd8179e0"
+   ]
+  }
+ },
+ "inkling/GSQ-RCO-IQ3_XXS": {
+  "engine": "strata-poly",
+  "archs": [
+   "inkling2_loop",
+   "inkling2"
+  ],
+  "files": [
+   "Inkling-2-Mini-GSQ-RCO-IQ3_XXS.gguf"
+  ],
+  "repo": "ISTA-DASLab/Inkling-2-Mini-GSQ-RCO-GGUF",
+  "pins": {
+   "Inkling-2-Mini-GSQ-RCO-IQ3_XXS.gguf": [
+    10608205952,
+    "f6533d05a0f01d6187160a51dc43e136b39dcc69485c2b819fda7ade0f4611ea"
+   ]
+  }
+ },
+ "inkling/GSQ-RCO-IQ2_S": {
+  "engine": "strata-poly",
+  "archs": [
+   "inkling2_loop",
+   "inkling2"
+  ],
+  "files": [
+   "Inkling-2-Mini-GSQ-RCO-IQ2_S.gguf"
+  ],
+  "repo": "ISTA-DASLab/Inkling-2-Mini-GSQ-RCO-GGUF",
+  "pins": {
+   "Inkling-2-Mini-GSQ-RCO-IQ2_S.gguf": [
+    8975863424,
+    "3a94bfe6e8f2741a438c0356fdc6a96ced55d453c3215e7b10a7bedcc470bd26"
+   ]
+  }
+ },
  "inkling/UD-Q4_K_XL": {
   "engine": "strata-poly",
   "archs": [

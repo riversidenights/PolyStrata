@@ -438,7 +438,8 @@ def setup_poly(a, info: dict, data: Path, elsewhere: list) -> int:
     # Mac ("mac_measured", largest first) gets the first of them that fits this Mac's memory.
     measured = fam.get("mac_measured") or ()
     fits = lambda m: sizes[m]["download_gb"] + OVERHEAD_GB <= info["ram_gb"] * GIB_GB   # noqa: E731
-    smallest = min(sizes, key=lambda m: sizes[m]["download_gb"])
+    # where some sizes were measured, the smallest of those (Inkling 2 Mini's GSQ-RCO files are smaller, not run on a Mac)
+    smallest = min([m for m in measured if m in sizes] or sizes, key=lambda m: sizes[m]["download_gb"])
     model = a.model or next((m for m in measured if m in sizes and fits(m)), smallest)
     if not a.model and not a.yes:
         names = list(sizes)
@@ -517,7 +518,7 @@ def setup_poly(a, info: dict, data: Path, elsewhere: list) -> int:
     use_draft = draft_on and not (a.family == "inkling" and eff_parallel >= 2)
     base = d.get("hf", fam["hf"]).format(q=model)
     for file in files:
-        asset(file, base + file.name + fam.get("remote_suffix", ""))
+        asset(file, base + file.name + d.get("remote_suffix", fam.get("remote_suffix", "")))
     S.check_shards(files)
     draft = None
     if use_draft and d.get("draft_model"):

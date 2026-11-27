@@ -322,7 +322,8 @@ class InklingCustomGgufTests(unittest.TestCase):
         """A file named as an offered size is that size, with no entry added."""
         family, model, sizes, _ = self._resolve("Inkling-2-Mini-UD-Q4_K_XL.gguf", "inkling2_loop", self.IQ4_NL)
         self.assertEqual((family, model), ("inkling", "UD-Q4_K_XL"))
-        self.assertEqual(sorted(sizes), ["UD-Q2_K_XL", "UD-Q3_K_XL", "UD-Q4_K_XL"])
+        self.assertEqual(sorted(sizes), ["GSQ-RCO-IQ2_S", "GSQ-RCO-IQ3_S", "GSQ-RCO-IQ3_XXS", "GSQ-RCO-Q2_K_XL",
+                                         "UD-Q2_K_XL", "UD-Q3_K_XL", "UD-Q4_K_XL"])
 
     def test_a_name_inside_an_offered_one_is_its_own_size(self):
         """Q2_K is not UD-Q2_K_XL (its letters are inside that name): a size of its own, from its header."""

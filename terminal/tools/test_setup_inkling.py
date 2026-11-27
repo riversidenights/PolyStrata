@@ -17,7 +17,12 @@ import setup  # noqa: E402
 from tools import test_setup_glm as glm_tests  # noqa: E402
 
 FAM = setup.FAMILIES["inkling"]
-SIZES = [("UD-Q4_K_XL", 17629760736), ("UD-Q3_K_XL", 13631779296), ("UD-Q2_K_XL", 9138716608)]
+# ISTA-DASLab's GSQ-RCO sizes first (the installer's default), then Unsloth's
+GSQ = [("GSQ-RCO-IQ3_S", 11425259648), ("GSQ-RCO-Q2_K_XL", 9792516224), ("GSQ-RCO-IQ3_XXS", 10608205952),
+       ("GSQ-RCO-IQ2_S", 8975863424)]
+UD = [("UD-Q4_K_XL", 17629760736), ("UD-Q3_K_XL", 13631779296), ("UD-Q2_K_XL", 9138716608)]
+SIZES = GSQ + UD
+LOW_EFFORT = ("GSQ-RCO-Q2_K_XL", "GSQ-RCO-IQ2_S", "UD-Q2_K_XL")
 DSPARK = "dspark-Inkling-2-Mini-Q8_0.gguf"
 DSPARK_PIN = (402278560, "2ec78510da837e8fc3be54a14757a0c5fbd2d8d9e85a0d92853fafdf674f3773")
 
@@ -31,6 +36,14 @@ class Pins(unittest.TestCase):
         self.assertRegex(FAM["draft_hf"], r"^https://huggingface.co/unsloth/Inkling-2-Mini-GGUF/resolve/[0-9a-f]{40}/$")
         self.assertEqual(FAM["draft_hf"], FAM["mmproj_hf"])
         self.assertEqual(setup.ms_file(FAM["draft_hf"] + DSPARK), ("unsloth/Inkling-2-Mini-GGUF", DSPARK))
+        # the GSQ-RCO sizes: ISTA-DASLab's repository root, no _file suffix, Unsloth's drafter (its own is another
+        # layout) and the family's image encoder
+        for size, _n in GSQ:
+            d = FAM["models"][size]
+            self.assertRegex(d["hf"], r"^https://huggingface.co/ISTA-DASLab/Inkling-2-Mini-GSQ-RCO-GGUF/resolve/"
+                                      r"[0-9a-f]{40}/$")
+            self.assertEqual((d["remote_suffix"], d["draft_hf"]), ("", FAM["draft_hf"]))
+            self.assertNotIn("mmproj_hf", d)
         self.assertEqual(list(FAM["sha256"]), [f"Inkling-2-Mini-{m}.gguf" for m, _ in SIZES] + [DSPARK, FAM["mmproj"]])
         self.assertEqual(FAM["sha256"][DSPARK], DSPARK_PIN)
         for size, n in SIZES:
@@ -128,7 +141,9 @@ class Main(unittest.TestCase):
                 self.assertEqual(code, 0, out)
                 cfg = json.loads((self.t / f"strata-inkling-{size.lower()}.json").read_text())
                 file = f"Inkling-2-Mini-{size}.gguf"
-                self.assertEqual(self.downloads, [FAM["hf"] + file + "_file", FAM["draft_hf"] + DSPARK])
+                d = FAM["models"][size]
+                self.assertEqual(self.downloads, [d.get("hf", FAM["hf"]) + file + d.get("remote_suffix", "_file"),
+                                                  FAM["draft_hf"] + DSPARK])
                 self.assertEqual(self.verified, [(file, *FAM["sha256"][file]), (DSPARK, *DSPARK_PIN)])
                 args = cfg["args"]
                 self.assertEqual(Path(args[args.index("--model") + 1]), self.t / "models" / f"inkling-{size}" / file)
@@ -140,7 +155,7 @@ class Main(unittest.TestCase):
                     self.assertNotIn(flag, args)
                 self.assertNotIn("parallel", cfg)                                 # opt-in: written when asked
                 self.assertNotIn("vision", cfg)
-                self.assertEqual(cfg.get("reasoning_effort"), "low" if size == "UD-Q2_K_XL" else 0.4)
+                self.assertEqual(cfg.get("reasoning_effort"), "low" if size in LOW_EFFORT else 0.4)
                 self.assertIn("--parallel 2 to 4", out)                           # offered, as for the other families
         # Re-running setup keeps a user-customized reasoning_effort in the existing config
         cfg_path = self.t / "strata-inkling-ud-q3_k_xl.json"
@@ -167,6 +182,29 @@ class Main(unittest.TestCase):
         self.assertEqual(args.count("--tail-skip"), 1)
         self.assertIn("holds part of", out)
         self.assertNotIn("small_card", json.loads((self.t / "strata-inkling-ud-q3_k_xl.json").read_text()))
+
+    def test_gsq_rco_on_a_card_that_holds_part_of_the_experts_keeps_its_attention(self):
+        # GSQ-RCO's attention is RCO's mix of IQ4_XS to Q8_0: no --attn-requant, the other two small-card flags
+        self.downloads = []
+        code, out, _ = self.main(family="inkling", model="GSQ-RCO-IQ3_S", ram=32.0, vram=8188 / 1024)
+        self.assertEqual(code, 0, out)
+        args = json.loads((self.t / "strata-inkling-gsq-rco-iq3_s.json").read_text())["args"]
+        self.assertNotIn("--attn-requant", args)
+        self.assertIn("--loop-bf16", args)
+        self.assertEqual(args[args.index("--tail-skip") + 1], "4")
+        self.assertEqual(args.count("--tail-skip"), 1)
+        self.assertNotIn("--draft-model", args)
+        self.assertEqual(self.downloads, [FAM["models"]["GSQ-RCO-IQ3_S"]["hf"] + "Inkling-2-Mini-GSQ-RCO-IQ3_S.gguf"])
+        self.assertIn("--loop-bf16 --tail-skip 4 (fewer bytes", out)
+
+    def test_the_installer_takes_gsq_rco(self):
+        sizes = setup.family_models("inkling")
+        for ram, vram in ((16.0, 8.0), (32.0, 8.0), (64.0, 32.0), (128.0, 24.0)):
+            self.assertEqual(setup.poly_default(sizes, ram, vram), "GSQ-RCO-IQ3_S", (ram, vram))
+        self.assertEqual(setup.poly_default(sizes, 8.0, 6.0), "GSQ-RCO-IQ2_S")   # the least RAM
+        code, out, cfg = self.main(family="inkling", ram=32.0, vram=8188 / 1024)
+        self.assertEqual(code, 0, out)
+        self.assertTrue((self.t / "strata-inkling-gsq-rco-iq3_s.json").is_file(), out)
 
     CFG = "strata-inkling-ud-q3_k_xl.json"
     SMALL = ("--attn-requant", "--loop-bf16", "--tail-skip")

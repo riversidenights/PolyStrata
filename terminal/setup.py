@@ -137,6 +137,7 @@ HF_REVISIONS = {
     "unsloth/DeepSeek-V4-Flash-0731-GGUF": "fbbb5b93fb787c21338159b0af3318bb3f4d9768",               # 2026-10-15
     "unsloth/LFM2.5-24B-A2B-GGUF": "aacc77834f6aa568c93b4dbd6d295059736be98c",                        # 2026-10-20
     "unsloth/Inkling-2-Mini-GGUF": "ea0c79b2ecd73669e774c8519b79bfabfddbc027",                        # 2026-11-21
+    "ISTA-DASLab/Inkling-2-Mini-GSQ-RCO-GGUF": "f0da1097633dd7c2f5733e4077cff861be122245",            # 2026-11-26
     "LiquidAI/LFM2.5-24B-A2B-GGUF": "0912d33141f77e10705345a6732bfd83f0252fdc",                       # 2026-10-15
     "unsloth/flint-GGUF": "20468edfc38ab43d6914cc88b08cbecb05d0fc62",                                 # 2026-10-21
     "openbmb/MiniCPM-V-4.7-35B-A3B-gguf": "77f6d8cb08b2b115ce27d2e2ac1359e126921689",                   # 2026-10-12
@@ -773,6 +774,14 @@ UNSLOTH_MIN_RAM_GB = 48         # the RAM-budget mode below which setup says an 
 # 204800 (200K) sits between 128K and 256K: it is inside the trained 262144, so it needs no rope scaling and
 # costs ~2.8 GB of 8-bit KV with IQ3_S (vs ~3.6 GB at 256K) - a middle step for PCs that cannot hold 256K.
 CONTEXTS = [8192, 32768, 65536, 131072, 204800, 262144, 393216, 524288]
+
+# What the GSQ-RCO sizes of Inkling 2 Mini share (FAMILIES["inkling"], where the reasons are): ISTA-DASLab's repository,
+# whose files have no _file suffix, Unsloth's DSpark drafter, and the small-card flags without --attn-requant.
+GSQ_INKLING = {"hf": hf("ISTA-DASLab/Inkling-2-Mini-GSQ-RCO-GGUF"), "remote_suffix": "",
+               "draft_hf": hf("unsloth/Inkling-2-Mini-GGUF"), "draft_model": "dspark-Inkling-2-Mini-Q8_0.gguf",
+               "small_card_args": ["--loop-bf16", "--tail-skip", "4"]}
+
+
 # The model families: the same architecture, weights in the same three GSQ-RCO sizes, different files.
 FAMILIES = {
     "qwen": {"title": "Qwen3.8-Flash-Next", "by": "Qwen; GSQ-RCO quants by ISTA-DASLab",
@@ -882,7 +891,8 @@ FAMILIES = {
     # for the family whose answers it moves no more than the Strata project's default moves its own (docs/BACKENDS.md).
     # "small_card_args": engine flags for a card that does not hold every expert of the size (poly_held_gb()), where a
     # token is bound by the bytes it reads from VRAM and by the experts the CPU computes; a card that holds them all
-    # runs as before.  --inkling-small-card off leaves them out, and a later setup run keeps that (poly_small_card()).
+    # runs as before; a size may name its own.  --inkling-small-card off leaves them out, and a later setup run keeps
+    # that (poly_small_card()).  "remote_suffix": what the repository adds to a file's name; a size may name its own.
     # "laptop_tps": tokens/s written after a prompt that fills each context on the 8 GB laptop, where the family's
     # differ from the others'.
     # "batch_gb": the VRAM the engine's prompt batch takes for a second 1,024 tokens, measured on the RTX 5090; a card
@@ -935,9 +945,23 @@ FAMILIES = {
     # opt-in as for the other strata-poly families; on a Mac the engine keeps one sequence's state for it, so it answers
     # one request at a time there ("one_request": "mac": setup_mac.py writes "parallel": 1).  "vram_beside_gb" is the peak VRAM measured on an RTX 5090 with no expert on the card, a 10,081-token
     # prompt read 1,024 tokens at a time at a 32K context (2,916 MiB), plus the rows of the context's other tokens.
-    "inkling": {"title": "Inkling 2 Mini", "by": "Thinking Machines; quantized by Unsloth",
+    # The GSQ-RCO sizes are ISTA-DASLab's (its own "hf", no _file suffix: "remote_suffix" ""): a type for each tensor,
+    # and for each layer's experts, chosen under a size budget (IQ1_S to IQ3_S gate/up, Q2_0 and IQ4_NL down, IQ4_XS
+    # to Q8_0 attention, a BF16 token table that stays in RAM).  The engine reads them as they are: the same tensors as
+    # Unsloth's Mainline_Support files, without the experts' .scale tensors.  They come first: GSQ-RCO-IQ3_S scores
+    # 99.2% of the unquantized model on ISTA-DASLab's AIME25 / GPQA-D / LCB v6 average with 9.52 GB of experts, against
+    # UD-Q3_K_XL's 12.20 GB, so a card holds more of them.  Their "arena_gb" is the experts' bytes read from each file's
+    # header; their "vram_beside_gb" is an estimate, not a measurement: Unsloth's measured sizes take about 2.5 GB
+    # beside the weights on the card (attention, output, norms), and these have 0.80 to 0.96 GB of them (Unsloth's 0.99
+    # to 1.33).  The repository's own DSpark drafter is another layout (ctx_mix and markov_ctx tensors) that the
+    # engine's drafter does not read, and its mmproj is the same tensors as Unsloth's: both come from Unsloth's
+    # repository ("draft_hf"; the family's "mmproj_hf").  Their small-card flags leave out --attn-requant: their
+    # attention averages about 5.8 bits a weight already (Unsloth's mostly Q8_0), so Q5_K would save about 23 MB and
+    # round RCO's chosen types a second time.
+    "inkling": {"title": "Inkling 2 Mini", "by": "Thinking Machines; quantized by ISTA-DASLab (GSQ-RCO) or Unsloth",
                 "about": "experimental, on the strata-poly engine: one NVIDIA card, Linux or Windows, or a Mac (beta); "
-                         "AMD cards are not ready (docs/models/inkling.md); reads pictures; a 17.6 GB file, or 13.6 or 9.1 GB",
+                         "AMD cards are not ready (docs/models/inkling.md); reads pictures; an 11.4 GB GSQ-RCO file "
+                         "by default, 9.0 to 17.6 GB in all",
                 "hf": hf("unsloth/Inkling-2-Mini-GGUF") + "Mainline_Support/", "file": "Inkling-2-Mini-{q}.gguf",
                 "remote_suffix": "_file", "shards": 1,
                 "tag": "inkling-", "name": "inkling-2-mini", "engine": "poly", "vision": True, "experimental": True,
@@ -961,7 +985,20 @@ FAMILIES = {
                 # so the CPU computes more of a token's experts; 16-23% slower writing after a 302-token prompt on the
                 # 8 and 16 GB cards measured)
                 "small_card_args": ["--attn-requant", "q5_k", "--loop-bf16", "--tail-skip", "4"],
-                "models": {"UD-Q4_K_XL": {"about": "4-bit experts (NVFP4, Unsloth Dynamic), 8-bit where they write, and DSpark drafter",
+                "models": {"GSQ-RCO-IQ3_S": dict(GSQ_INKLING, **{
+                               "about": "ISTA-DASLab's GSQ-RCO, 1- to 3-bit experts and 4- to 8-bit attention mixed "
+                                        "by tensor: 99.2% of the model's scores, and DSpark drafter",
+                               "download_gb": 11.8, "ram_gb": 15, "arena_gb": 9.523297792, "vram_beside_gb": 3.5}),
+                           "GSQ-RCO-Q2_K_XL": dict(GSQ_INKLING, **{
+                               "about": "GSQ-RCO, smaller: 98.0% of the model's scores, and DSpark drafter",
+                               "download_gb": 10.2, "ram_gb": 13, "arena_gb": 7.962624, "vram_beside_gb": 3.4}),
+                           "GSQ-RCO-IQ3_XXS": dict(GSQ_INKLING, **{
+                               "about": "GSQ-RCO between the two: 97.7% of the model's scores, and DSpark drafter",
+                               "download_gb": 11.0, "ram_gb": 14, "arena_gb": 8.758886, "vram_beside_gb": 3.5}),
+                           "GSQ-RCO-IQ2_S": dict(GSQ_INKLING, **{
+                               "about": "GSQ-RCO, the smallest: 94.3% of the model's scores, and DSpark drafter",
+                               "download_gb": 9.4, "ram_gb": 12, "arena_gb": 7.235371, "vram_beside_gb": 3.4}),
+                           "UD-Q4_K_XL": {"about": "4-bit experts (NVFP4, Unsloth Dynamic), 8-bit where they write, and DSpark drafter",
                                           "download_gb": 18.0, "ram_gb": 21, "arena_gb": 15.797846016,
                                           "vram_beside_gb": 3.7,
                                           "draft_model": "dspark-Inkling-2-Mini-Q8_0.gguf"},
@@ -973,7 +1010,15 @@ FAMILIES = {
                                           "download_gb": 9.5, "ram_gb": 13, "arena_gb": 7.888306176,
                                           "vram_beside_gb": 3.5,
                                           "draft_model": "dspark-Inkling-2-Mini-Q8_0.gguf"}},
-                "sha256": {"Inkling-2-Mini-UD-Q4_K_XL.gguf":
+                "sha256": {"Inkling-2-Mini-GSQ-RCO-IQ3_S.gguf":
+                           (11425259648, "8a3515374c3cd9b65a1677b17e805bb1e32df8e98756e5f0d2fe1837d62aa4cb"),
+                           "Inkling-2-Mini-GSQ-RCO-Q2_K_XL.gguf":
+                           (9792516224, "df264db473adf61660f1968726646a73599e295e882d6a120f675363bd8179e0"),
+                           "Inkling-2-Mini-GSQ-RCO-IQ3_XXS.gguf":
+                           (10608205952, "f6533d05a0f01d6187160a51dc43e136b39dcc69485c2b819fda7ade0f4611ea"),
+                           "Inkling-2-Mini-GSQ-RCO-IQ2_S.gguf":
+                           (8975863424, "3a94bfe6e8f2741a438c0356fdc6a96ced55d453c3215e7b10a7bedcc470bd26"),
+                           "Inkling-2-Mini-UD-Q4_K_XL.gguf":
                            (17629760736, "e64276656f072e9b2197a61723667cbdb71da66a716ffd966e572c21088f3cd3"),
                            "Inkling-2-Mini-UD-Q3_K_XL.gguf":
                            (13631779296, "e2d03e8c92ac21cff0e3309b95f40dfd27d1825184f0d2bc09db249797273639"),
@@ -10283,11 +10328,12 @@ def inkling_lora(a, family: str, paths) -> Path | None:
     return lora
 
 
-_INKLING_Q2_RE = re.compile(r"(?:^|[^a-z0-9])q2(?:[_\-.]|$)", re.IGNORECASE)
+_INKLING_Q2_RE = re.compile(r"(?:^|[^a-z0-9])i?q[12](?:[_\-.]|$)", re.IGNORECASE)
 
 
 def inkling_default_effort(model: str) -> str | float:
-    """Default reasoning_effort written into new Inkling 2 Mini configs: "low" (0.2) for Q2, 0.4 for Q3/Q4/others."""
+    """Default reasoning_effort written into new Inkling 2 Mini configs: "low" (0.2) for the 1- and 2-bit sizes (Q2,
+    and GSQ-RCO-IQ2_S, the smallest), 0.4 for Q3/Q4/others."""
     return "low" if _INKLING_Q2_RE.search(str(model or "")) else 0.4
 
 
@@ -10957,7 +11003,7 @@ def poly_setup(a, family, gpu, hip, cuda_tk, multi, ram, data, elsewhere, port, 
                 ok(f"{s.name} already downloaded")
                 continue
             rel = s.relative_to(models_dir).as_posix() if s.is_relative_to(models_dir) else s.name
-            download(d.get("hf", fam["hf"]) + rel + fam.get("remote_suffix", ""), s)
+            download(d.get("hf", fam["hf"]) + rel + d.get("remote_suffix", fam.get("remote_suffix", "")), s)
     check_shards(shards)
     # a size from another repository can ship a draft model or an image encoder of the family's file names
     sha = {**fam["sha256"], **d.get("sha256", {})}
@@ -11047,8 +11093,9 @@ def poly_setup(a, family, gpu, hip, cuda_tk, multi, ram, data, elsewhere, port, 
     small = poly_small_card(a, fam, [cfg_path, adopted if adopted is not None and adopted.name == cfg_path.name else None])
     part = small is not None and not multi and poly_held_gb(d, vram) < d["arena_gb"]
     if part and small == "on":
-        args += fam["small_card_args"]
-        ok(f"this card holds part of {model}'s experts: {' '.join(fam['small_card_args'])} (fewer bytes a token, "
+        flags = d.get("small_card_args", fam["small_card_args"])   # a size's own (the GSQ-RCO sizes': no --attn-requant)
+        args += flags
+        ok(f"this card holds part of {model}'s experts: {' '.join(flags)} (fewer bytes a token, "
            "and the answers move a little; --inkling-small-card off: the high-accuracy mode, without them)")
     elif part:
         ok(f"this card holds part of {model}'s experts: high-accuracy mode, without the small-card settings "
@@ -13078,7 +13125,8 @@ def main() -> int:
                          "experts fit on the GPU); auto: when the RAM has room for it")
     ap.add_argument("--inkling-small-card", choices=["on", "off"],
                     help="Inkling 2 Mini on a card that does not hold every expert of the size: on = the small-card "
-                         "settings (--attn-requant q5_k --loop-bf16 --tail-skip 4: faster, the answers move a "
+                         "settings (--attn-requant q5_k --loop-bf16 --tail-skip 4, the GSQ-RCO sizes without "
+                         "--attn-requant: faster, the answers move a "
                          "little; the default); off = the high-accuracy mode, without them. A later setup run keeps "
                          "off (\"small_card\" in the run config) until --inkling-small-card on")
     ap.add_argument("--backend", choices=["cuda", "hip", "sycl"],

@@ -2,7 +2,8 @@
 
 Back to [README.md](../../README.md)
 
-**Inkling 2 Mini** by Thinking Machines: a file of 9 to 18 GB. It is experimental here. It has run on Linux with an
+**Inkling 2 Mini** by Thinking Machines: a file of 9 to 18 GB, in ISTA-DASLab's GSQ-RCO quantization (the default)
+or Unsloth's. It is experimental here. It has run on Linux with an
 RTX 5090, on Windows with an 8 GB laptop card and on a Mac with an M5 Ultra (a beta there). It
 reads pictures too. Its 24 layers of weights run as 48: the twelve in the middle run three
 times for every token. Forty of the 48 look back 1,024 tokens only, so a long conversation takes little VRAM:
@@ -279,8 +280,8 @@ rows took 3.4 s.
 | | |
 | --- | --- |
 | **Graphics card** | One **NVIDIA** card with **8 GB of VRAM or more**. It has run on an RTX 5090 (32 GB) and on an RTX 4070 Laptop (8 GB). About 3.7 GB are taken before any expert at a 32K context. Or an **Apple Silicon Mac** (beta): it has run on an M5 Ultra. |
-| **RAM** | About **21, 17 or 13 GB** beside an 8 GB card for UD-Q4_K_XL, UD-Q3_K_XL and UD-Q2_K_XL, the installer's estimate. A 32 GB card holds any of them whole. On a Mac, setup takes UD-Q3_K_XL from 32 GB of unified memory and UD-Q2_K_XL below that. |
-| **Disk** | 9.5 to 18.0 GB (the model file and its 0.4 GB DSpark drafter). |
+| **RAM** | About **15 GB** beside an 8 GB card for GSQ-RCO-IQ3_S, the size the installer takes, and 12 to 21 GB for the others (the table below), the installer's estimate. A 32 GB card holds any of them whole. On a Mac, setup takes UD-Q3_K_XL from 32 GB of unified memory and UD-Q2_K_XL below that. |
+| **Disk** | 9.4 to 18.0 GB (the model file and its 0.4 GB DSpark drafter); 11.8 GB for GSQ-RCO-IQ3_S. |
 | **System** | Linux or Windows 10 / 11, and a current NVIDIA driver; or macOS 15 or newer. |
 
 **AMD (HIP), experimental, not ready:** the engine builds for RDNA3 and RDNA4 (gfx1100, gfx1200, gfx1201). It has run
@@ -316,18 +317,33 @@ license is Apache 2.0.
 ./setup.sh --family inkling
 ```
 
-Add `--model UD-Q3_K_XL` or `--model UD-Q2_K_XL` for a smaller size.
+The installer takes GSQ-RCO-IQ3_S, or GSQ-RCO-IQ2_S on a PC with too little RAM for it. Add `--model <size>` for
+another one, for example `--model GSQ-RCO-Q2_K_XL` or `--model UD-Q4_K_XL`.
 
 ## Which model should I pick?
 
 | Size | What it is | Download | RAM beside an 8 GB card |
 | --- | --- | ---: | ---: |
+| **GSQ-RCO-IQ3_S** (the default) | 1- to 3-bit experts and 4- to 8-bit attention, a type for each tensor ([ISTA-DASLab](https://huggingface.co/ISTA-DASLab/Inkling-2-Mini-GSQ-RCO-GGUF)): 99.2% of the model's scores | 11.8 GB | about 15 GB |
+| **GSQ-RCO-IQ3_XXS** | the same method, smaller: 97.7% | 11.0 GB | about 14 GB |
+| **GSQ-RCO-Q2_K_XL** | the same method, smaller: 98.0% | 10.2 GB | about 13 GB |
+| **GSQ-RCO-IQ2_S** | the same method, the smallest: 94.3% | 9.4 GB | about 12 GB |
 | **UD-Q4_K_XL** | 4-bit experts, 8-bit where they write ([Unsloth](https://huggingface.co/unsloth/Inkling-2-Mini-GGUF)) | 18.0 GB | about 21 GB |
 | **UD-Q3_K_XL** | 3- and 4-bit experts mixed | 14.0 GB | about 17 GB |
 | **UD-Q2_K_XL** | 1- to 2-bit experts: the smallest | 9.5 GB | about 13 GB |
 
-Each download includes the 0.4 GB DSpark draft model (`dspark-Inkling-2-Mini-Q8_0.gguf`), fetched from the top of the
-repository. The installer downloads the main files under the repository's `Mainline_Support` folder, the layout llama.cpp runs
+The percentages are ISTA-DASLab's: the average of AIME25, GPQA-Diamond and LiveCodeBench v6 against the unquantized
+model, at `xhigh` thinking effort. They were not measured here, and the GSQ-RCO sizes have not been run on a card here
+yet. They are the default because they are smaller: GSQ-RCO-IQ3_S has 9.5 GB of experts against UD-Q3_K_XL's 12.2 GB,
+so a card that holds only part of them holds more of them, and a card that holds all of them reads fewer bytes a token.
+The engine reads their tensor types (IQ1_S to IQ3_S, Q2_0, IQ4_NL, IQ4_XS, Q4_K to Q8_0, a BF16 token table) as it
+reads Unsloth's files. Their own DSpark drafter is another layout that the engine does not read yet, so setup takes
+Unsloth's drafter and image encoder beside them. On a card that holds only part of their experts setup adds
+`--loop-bf16 --tail-skip 4` but not `--attn-requant q5_k`: their attention has about 5.8 bits a weight already, so
+rounding it to Q5_K would save about 23 MB. On a Mac the installer still takes the Unsloth sizes measured there.
+
+Each download includes the 0.4 GB DSpark draft model (`dspark-Inkling-2-Mini-Q8_0.gguf`), fetched from the top of
+Unsloth's repository. The installer downloads Unsloth's main files under the repository's `Mainline_Support` folder, the layout llama.cpp runs
 (`inkling2_loop`). The files at the top of the repository (architecture `inkling2`, for example UD-IQ3_XXS) are
 Unsloth's layout of the same weights: the engine reads them too. Setup takes them with `--gguf-dir` or
 `--custom-gguf`; the engine run by hand takes the file as its `--model`.
@@ -364,8 +380,8 @@ model otherwise opens a thinking block now and then. More in
 
 Thinking effort can be set per request (`reasoning_effort`) or in the run config using `none` (`0`), `minimal`
 (`0.1`), `low` (`0.2`), `medium` (`0.4`), `high` (`0.9`), `xhigh` / `max` (`0.99`), or any explicit number from `0` to
-`0.99` (for example `0.7`). When omitted, `UD-Q2_K_XL` defaults to `low` (`0.2`) and `UD-Q3_K_XL` / `UD-Q4_K_XL`
-default to `0.4`, keeping thinking concise and avoiding long loops.
+`0.99` (for example `0.7`). When omitted, the 1- and 2-bit sizes (`UD-Q2_K_XL`, `GSQ-RCO-Q2_K_XL`, `GSQ-RCO-IQ2_S`)
+default to `low` (`0.2`) and the others to `0.4`, keeping thinking concise and avoiding long loops.
 
 Optional LoopCD-Hidden extrapolation at the loop core exit can be enabled with `--loopcd-hidden F` (`0` to `1`,
 default `0` = off; `STRATA_INK_LOOPCD_HIDDEN=F` overrides it). For example, `--loopcd-hidden 0.2` on `UD-Q2_K_XL` or
