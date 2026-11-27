@@ -60,6 +60,15 @@ if(STRATA_BUILD_TESTS)
   add_test(NAME poly_stream_stage_test COMMAND poly_stream_stage_test)
   add_executable(poly_split_plan_test src/poly/split_plan_test.cpp)
   add_test(NAME poly_split_plan_test COMMAND poly_split_plan_test)
+  # Inkling 2's DSpark drafter in llama.cpp's layout (ISTA-DASLab's file) made into the buffers the engine loads,
+  # against Unsloth's file of the same drafter: on the files named by STRATA_DS_ISTA and STRATA_DS_UNSLOTH, else SKIPPED
+  if(TARGET strata_quant)
+    add_executable(poly_ds_layout_test src/poly/ds_layout_test.cpp)
+    target_include_directories(poly_ds_layout_test PRIVATE include src/poly)
+    target_link_libraries(poly_ds_layout_test PRIVATE strata_quant)
+    add_test(NAME poly_ds_layout_test COMMAND poly_ds_layout_test)
+    set_tests_properties(poly_ds_layout_test PROPERTIES SKIP_REGULAR_EXPRESSION "SKIPPED: ")
+  endif()
 endif()
 
 # Shared prepared-input GDN recurrence on the tensor cores (gdn_mma_tiles.cuh has the tiles it takes from llama.cpp's

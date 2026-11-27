@@ -490,7 +490,14 @@ def setup_poly(a, info: dict, data: Path, elsewhere: list) -> int:
     if a.update:
         return 0
 
+    pins = {**fam["sha256"], **d.get("sha256", {})}   # a size's own pins first (Inkling 2's GSQ-RCO draft model)
+
     def asset(path: Path, url: str) -> Path:
+        if (path.is_file() and S.done(path) and not a.gguf_dir and path.name in d.get("sha256", {})
+                and path.name in fam["sha256"] and d["sha256"][path.name] != fam["sha256"][path.name]
+                and path.stat().st_size == fam["sha256"][path.name][0]):   # the family's build: the size's own instead
+            path.unlink()
+            path.with_name(path.name + ".done").unlink(missing_ok=True)
         if path.is_file() and (S.done(path) or S.whole_shard(path)):
             S.ok(f"using {path}")
         else:
@@ -498,7 +505,7 @@ def setup_poly(a, info: dict, data: Path, elsewhere: list) -> int:
                 S.fail(f"model downloads disabled; missing complete file: {path}")
             path.parent.mkdir(parents=True, exist_ok=True)
             S.download(url, path)
-        S.verify_sha256(path, *fam["sha256"][path.name])
+        S.verify_sha256(path, *pins[path.name])
         return path
 
     S.step(5, f"{fam['title']} {model}")

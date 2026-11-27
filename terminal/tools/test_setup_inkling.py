@@ -7,6 +7,7 @@ and one request at a time.  Mocked like tools/test_setup_glm.py, whose harness t
 from __future__ import annotations
 
 import json
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -25,6 +26,15 @@ SIZES = GSQ + UD
 LOW_EFFORT = ("GSQ-RCO-Q2_K_XL", "GSQ-RCO-IQ2_S", "UD-Q2_K_XL")
 DSPARK = "dspark-Inkling-2-Mini-Q8_0.gguf"
 DSPARK_PIN = (402278560, "2ec78510da837e8fc3be54a14757a0c5fbd2d8d9e85a0d92853fafdf674f3773")
+# ISTA-DASLab's DSpark drafter: the same name, llama.cpp's layout of the same drafter (engine/src/poly/ds_layout.hpp)
+GSQ_DSPARK_PIN = (404128576, "7cca0010feae71c25c8530b202e05fd9d1eae09f635ae4f5f31b9f20470e8c48")
+
+
+def draft_of(size):
+    """The size's draft model: its folder on the Hub and its pin."""
+    d = FAM["models"][size]
+    gsq = size.startswith("GSQ-RCO-")
+    return (d["hf"] if gsq else FAM["draft_hf"]), (GSQ_DSPARK_PIN if gsq else DSPARK_PIN)
 
 
 class Pins(unittest.TestCase):
@@ -36,13 +46,15 @@ class Pins(unittest.TestCase):
         self.assertRegex(FAM["draft_hf"], r"^https://huggingface.co/unsloth/Inkling-2-Mini-GGUF/resolve/[0-9a-f]{40}/$")
         self.assertEqual(FAM["draft_hf"], FAM["mmproj_hf"])
         self.assertEqual(setup.ms_file(FAM["draft_hf"] + DSPARK), ("unsloth/Inkling-2-Mini-GGUF", DSPARK))
-        # the GSQ-RCO sizes: ISTA-DASLab's repository root, no _file suffix, Unsloth's drafter (its own is another
-        # layout) and the family's image encoder
+        # the GSQ-RCO sizes: ISTA-DASLab's repository root, no _file suffix, its own drafter (pinned for these
+        # sizes: Unsloth's name, other bytes) and the family's image encoder
         for size, _n in GSQ:
             d = FAM["models"][size]
             self.assertRegex(d["hf"], r"^https://huggingface.co/ISTA-DASLab/Inkling-2-Mini-GSQ-RCO-GGUF/resolve/"
                                       r"[0-9a-f]{40}/$")
-            self.assertEqual((d["remote_suffix"], d["draft_hf"]), ("", FAM["draft_hf"]))
+            self.assertEqual(d["remote_suffix"], "")
+            self.assertNotIn("draft_hf", d)
+            self.assertEqual(d["sha256"], {DSPARK: GSQ_DSPARK_PIN})
             self.assertNotIn("mmproj_hf", d)
         self.assertEqual(list(FAM["sha256"]), [f"Inkling-2-Mini-{m}.gguf" for m, _ in SIZES] + [DSPARK, FAM["mmproj"]])
         self.assertEqual(FAM["sha256"][DSPARK], DSPARK_PIN)
@@ -53,7 +65,7 @@ class Pins(unittest.TestCase):
             self.assertEqual(d["draft_model"], DSPARK)
             self.assertEqual(FAM["sha256"][file][0], n)
             self.assertRegex(FAM["sha256"][file][1], r"^[0-9a-f]{64}$")
-            self.assertAlmostEqual((n + DSPARK_PIN[0]) / 1e9, d["download_gb"], delta=0.05)
+            self.assertAlmostEqual((n + draft_of(size)[1][0]) / 1e9, d["download_gb"], delta=0.05)
             self.assertLess(d["arena_gb"], d["download_gb"])
             self.assertEqual(d["ram_gb"], round(setup.poly_ram_need(d, 8.0)), size)
 
@@ -142,9 +154,10 @@ class Main(unittest.TestCase):
                 cfg = json.loads((self.t / f"strata-inkling-{size.lower()}.json").read_text())
                 file = f"Inkling-2-Mini-{size}.gguf"
                 d = FAM["models"][size]
+                hub, pin = draft_of(size)
                 self.assertEqual(self.downloads, [d.get("hf", FAM["hf"]) + file + d.get("remote_suffix", "_file"),
-                                                  FAM["draft_hf"] + DSPARK])
-                self.assertEqual(self.verified, [(file, *FAM["sha256"][file]), (DSPARK, *DSPARK_PIN)])
+                                                  hub + DSPARK])
+                self.assertEqual(self.verified, [(file, *FAM["sha256"][file]), (DSPARK, *pin)])
                 args = cfg["args"]
                 self.assertEqual(Path(args[args.index("--model") + 1]), self.t / "models" / f"inkling-{size}" / file)
                 self.assertEqual(Path(args[args.index("--draft-model") + 1]),
@@ -196,6 +209,27 @@ class Main(unittest.TestCase):
         self.assertNotIn("--draft-model", args)
         self.assertEqual(self.downloads, [FAM["models"]["GSQ-RCO-IQ3_S"]["hf"] + "Inkling-2-Mini-GSQ-RCO-IQ3_S.gguf"])
         self.assertIn("--loop-bf16 --tail-skip 4 (fewer bytes", out)
+
+    def test_unsloth_s_draft_beside_a_gsq_rco_size_is_replaced_by_its_own(self):
+        # a GSQ-RCO size set up when it took Unsloth's drafter: the finished file of the other build is downloaded again
+        folder = self.t / "models" / "inkling-GSQ-RCO-IQ3_S"
+        folder.mkdir(parents=True)
+        (folder / DSPARK).write_bytes(b"")
+        os.truncate(folder / DSPARK, DSPARK_PIN[0])                         # Unsloth's, by its size
+        setup.mark(folder / DSPARK)
+        self.downloads, self.verified = [], []
+        code, out, cfg = self.main(family="inkling", model="GSQ-RCO-IQ3_S", ram=64.0, vram=32607 / 1024)
+        self.assertEqual(code, 0, out)
+        self.assertIn("another build of the draft model", out)
+        self.assertIn(FAM["models"]["GSQ-RCO-IQ3_S"]["hf"] + DSPARK, self.downloads)
+        self.assertIn((DSPARK, *GSQ_DSPARK_PIN), self.verified)
+        self.assertIn("--draft-model", cfg["args"])
+        # the size's own file (its pinned size; the mocked download writes none) is kept on the next run
+        os.truncate(folder / DSPARK, GSQ_DSPARK_PIN[0])
+        self.downloads = []
+        code, out, cfg = self.main(family="inkling", model="GSQ-RCO-IQ3_S", ram=64.0, vram=32607 / 1024)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("another build", out)
 
     def test_the_installer_takes_gsq_rco(self):
         sizes = setup.family_models("inkling")

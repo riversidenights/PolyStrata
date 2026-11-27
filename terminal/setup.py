@@ -776,9 +776,12 @@ UNSLOTH_MIN_RAM_GB = 48         # the RAM-budget mode below which setup says an 
 CONTEXTS = [8192, 32768, 65536, 131072, 204800, 262144, 393216, 524288]
 
 # What the GSQ-RCO sizes of Inkling 2 Mini share (FAMILIES["inkling"], where the reasons are): ISTA-DASLab's repository,
-# whose files have no _file suffix, Unsloth's DSpark drafter, and the small-card flags without --attn-requant.
+# whose files have no _file suffix, its own DSpark drafter (the name of Unsloth's, other bytes: pinned here, for these
+# sizes), and the small-card flags without --attn-requant.
 GSQ_INKLING = {"hf": hf("ISTA-DASLab/Inkling-2-Mini-GSQ-RCO-GGUF"), "remote_suffix": "",
-               "draft_hf": hf("unsloth/Inkling-2-Mini-GGUF"), "draft_model": "dspark-Inkling-2-Mini-Q8_0.gguf",
+               "draft_model": "dspark-Inkling-2-Mini-Q8_0.gguf",
+               "sha256": {"dspark-Inkling-2-Mini-Q8_0.gguf":
+                          (404128576, "7cca0010feae71c25c8530b202e05fd9d1eae09f635ae4f5f31b9f20470e8c48")},
                "small_card_args": ["--loop-bf16", "--tail-skip", "4"]}
 
 
@@ -953,9 +956,10 @@ FAMILIES = {
     # UD-Q3_K_XL's 12.20 GB, so a card holds more of them.  Their "arena_gb" is the experts' bytes read from each file's
     # header; their "vram_beside_gb" is an estimate, not a measurement: Unsloth's measured sizes take about 2.5 GB
     # beside the weights on the card (attention, output, norms), and these have 0.80 to 0.96 GB of them (Unsloth's 0.99
-    # to 1.33).  The repository's own DSpark drafter is another layout (ctx_mix and markov_ctx tensors) that the
-    # engine's drafter does not read, and its mmproj is the same tensors as Unsloth's: both come from Unsloth's
-    # repository ("draft_hf"; the family's "mmproj_hf").  Their small-card flags leave out --attn-requant: their
+    # to 1.33).  The repository's own DSpark drafter is llama.cpp's layout of Unsloth's (the fold of its Markov head
+    # into the output matrix made from the model's own, the rest the same values: engine/src/poly/ds_layout.hpp), which
+    # the engine reads too; the sizes take it from their repository.  Its mmproj is the same tensors as Unsloth's: the
+    # family's (Unsloth's) is taken ("mmproj_hf").  Their small-card flags leave out --attn-requant: their
     # attention averages about 5.8 bits a weight already (Unsloth's mostly Q8_0), so Q5_K would save about 23 MB and
     # round RCO's chosen types a second time.
     "inkling": {"title": "Inkling 2 Mini", "by": "Thinking Machines; quantized by ISTA-DASLab (GSQ-RCO) or Unsloth",
@@ -10942,6 +10946,16 @@ def poly_setup(a, family, gpu, hip, cuda_tk, multi, ram, data, elsewhere, port, 
     guesser = models_dir / Path(d["draft_model"]).name if use_guesser else None
     if guesser is not None and (a.gguf_dir or _sg) and not guesser.exists():
         guesser = Path(a.models_dir) / tag / guesser.name
+    # the family's build of a draft model beside a size that pins another under the same name (Unsloth's beside a
+    # GSQ-RCO size, which takes ISTA-DASLab's own): downloaded again.  A file of the person's own (--gguf-dir,
+    # --custom-gguf) is left as it is.
+    own_pin = d.get("sha256", {}).get(guesser.name) if guesser is not None else None
+    fam_pin_ = fam["sha256"].get(guesser.name) if guesser is not None else None
+    if (own_pin and fam_pin_ and own_pin != fam_pin_ and not a.gguf_dir and not _sg and guesser.is_file()
+            and done(guesser) and guesser.stat().st_size == fam_pin_[0]):
+        say(f"  {guesser.name} in {guesser.parent} is another build of the draft model: downloading this size's own")
+        guesser.unlink()
+        guesser.with_name(guesser.name + ".done").unlink(missing_ok=True)
     if guesser is not None and guesser.exists() and not done(guesser) and whole_shard(guesser):
         mark(guesser, "whole (checked against its own tensor directory)")
     have_guesser = guesser is None or guesser.exists() and (done(guesser) or bool(a.gguf_dir) or whole_shard(guesser))

@@ -337,13 +337,19 @@ model, at `xhigh` thinking effort. They were not measured here, and the GSQ-RCO 
 yet. They are the default because they are smaller: GSQ-RCO-IQ3_S has 9.5 GB of experts against UD-Q3_K_XL's 12.2 GB,
 so a card that holds only part of them holds more of them, and a card that holds all of them reads fewer bytes a token.
 The engine reads their tensor types (IQ1_S to IQ3_S, Q2_0, IQ4_NL, IQ4_XS, Q4_K to Q8_0, a BF16 token table) as it
-reads Unsloth's files. Their own DSpark drafter is another layout that the engine does not read yet, so setup takes
-Unsloth's drafter and image encoder beside them. On a card that holds only part of their experts setup adds
+reads Unsloth's files. Setup takes their own DSpark drafter (below) and Unsloth's image encoder beside them. On a card that holds only part of their experts setup adds
 `--loop-bf16 --tail-skip 4` but not `--attn-requant q5_k`: their attention has about 5.8 bits a weight already, so
 rounding it to Q5_K would save about 23 MB. On a Mac the installer still takes the Unsloth sizes measured there.
 
 Each download includes the 0.4 GB DSpark draft model (`dspark-Inkling-2-Mini-Q8_0.gguf`), fetched from the top of
-Unsloth's repository. The installer downloads Unsloth's main files under the repository's `Mainline_Support` folder, the layout llama.cpp runs
+the size's repository: ISTA-DASLab's for the GSQ-RCO sizes, Unsloth's for the others. The two files have the same
+name and hold the same drafter in two layouts. ISTA-DASLab's is llama.cpp's (b12720): it stores the drafter's Markov
+head already multiplied through the model's output matrix (`markov_w2`), and its mixes of the model's layers after
+their softmax. Compared tensor by tensor, its layers are the same bytes as Unsloth's and its norms the same values;
+`markov_w2` matches Unsloth's `dspark_hidden_out` multiplied through the output matrix (Q8_0 rounding apart, a
+correlation of 0.99998). The engine reads either. The test `poly_ds_layout_test` checks the conversion on the two
+published files. Neither drafter has been run with a GSQ-RCO size on a card here yet, so their acceptance rates
+are not measured. A GSQ-RCO size set up before it took its own drafter gets it on the next setup run. The installer downloads Unsloth's main files under the repository's `Mainline_Support` folder, the layout llama.cpp runs
 (`inkling2_loop`). The files at the top of the repository (architecture `inkling2`, for example UD-IQ3_XXS) are
 Unsloth's layout of the same weights: the engine reads them too. Setup takes them with `--gguf-dir` or
 `--custom-gguf`; the engine run by hand takes the file as its `--model`.

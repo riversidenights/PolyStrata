@@ -258,6 +258,11 @@ private:
     float *ds_alpha_ = nullptr, *ds_mask_ = nullptr, *ds_norm_ = nullptr, *ds_mnorm_ = nullptr, *ds_jb_ = nullptr,
           *ds_ob_ = nullptr, *ds_wt_ = nullptr, *ds_fold_b_ = nullptr, *ds_ring_ = nullptr, *h_ds_row_ = nullptr;
     uint16_t* ds_w1_ = nullptr;   ///< the Markov head's token rows, BF16 [vocabulary][rank]
+    /// llama.cpp's layout of the drafter (ISTA-DASLab's file, llama.cpp b12720): the fold made already (markov_w2 and
+    /// its bias), each mix's weights by name and after their softmax (ctx_mix, markov_ctx_mix), the anchor's norm its
+    /// own (token_embd_norm, the target's values).  ds_open() reads which.
+    bool ds_folded_ = false;
+    float* ds_tnorm_ = nullptr;   ///< the drafter's anchor norm, where its file has one (else the target's tok_norm_)
     Dev ds_wsp_, ds_wh_, ds_wf_, ds_fold_;
     // the screen of the pick (ds_screen()): 2-bit copies of the output matrix's rows and the fold's, where the output
     // matrix is Q8_0; null: every guess reads both whole

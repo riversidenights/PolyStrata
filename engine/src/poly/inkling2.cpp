@@ -2,6 +2,7 @@
 // inkling2 graph (src/models/inkling2.cpp and inkling2-loop.cpp).
 #include "inkling2.hpp"
 
+#include "ds_layout.hpp"
 #include "gguf_types.hpp"
 #include "runtime.hpp"
 #include "strata/poly/kernels.hpp"
@@ -450,10 +451,27 @@ void Inkling2::ds_open() {
         need(v != nullptr, std::string("dflash.") + k);
         return v;
     };
+    // llama.cpp's layout (ISTA-DASLab's file, llama.cpp b12720) is the same drafter with the fold made (markov_w2):
+    // its keys name no Markov rank or vocabulary (markov_w1's shape says them), and its window counts the anchor's
+    // own position, as llama.cpp's sliding window does (a row at p sees p - window < key <= p, and every row of a
+    // block the anchor's): its 1025 is the 1024 positions before the anchor that ds_attend() reads with 1024.
+    ds_folded_ = ds_file_->find("markov_w2.weight") != nullptr;
+    const auto opt = [&](const char* k) { return ds_file_->get(std::string("dflash.") + k); };
     ds_block_ = (int) key("block_size")->u;
-    ds_window_ = (int) key("attention.sliding_window")->u;
+    ds_window_ = (int) key("attention.sliding_window")->u - (ds_folded_ ? 1 : 0);
     ds_ff_ = (int) key("feed_forward_length")->u;
-    ds_rank_ = (int) key("dspark.markov_rank")->u;
+    if (ds_folded_) {
+        const TensorInfo* w1 = ds_file_->find("markov_w1.weight");
+        const MetaValue* f_rnn = opt("has_markov_context");
+        need(f_rnn && f_rnn->u, "dflash.has_markov_context: a Markov head that reads the target's features");
+        need(w1->shape.size() == 2 &&
+                 (w1->shape[1] == (uint64_t) n_unpadded_ || w1->shape[1] == (uint64_t) n_vocab_),
+             "markov_w1, a row for each token of the target's vocabulary");
+        ds_rank_ = (int) w1->shape[0];
+    } else {
+        ds_rank_ = (int) key("dspark.markov_rank")->u;
+        need((int) key("vocab_size")->u == n_vocab_, "the target's vocabulary");
+    }
     ds_theta_ = (float) key("rope.freq_base")->num();
     ds_eps_ = (float) key("attention.layer_norm_rms_epsilon")->num();
     ds_cap_ = (float) key("final_logit_softcapping")->num();
@@ -463,13 +481,15 @@ void Inkling2::ds_open() {
     const int visits = n_layer_ + (n_pass_ - 1) * (core_end_ - core_start_);
     need((int) key("embedding_length")->u == n_embd_ && (int) key("attention.head_count")->u == n_head_ &&
              (int) key("attention.head_count_kv")->u == n_kv_ && (int) key("attention.key_length")->u == head_dim_ &&
-             head_dim_ == 128 && (int) key("vocab_size")->u == n_vocab_,
-         "the target's width, heads and vocabulary");
+             head_dim_ == 128,
+         "the target's width and heads");
     need(ds_block_ >= 2 && ds_block_ <= kDsRows && ds_rank_ % 32 == 0 && ds_rank_ <= 1024 && ds_ff_ > 0 &&
              ds_window_ > 0 && n_head_ % n_kv_ == 0 && n_head_ / n_kv_ * ds_block_ <= 24,
          "a block of 2 to 8, a Markov rank of a multiple of 32, 24 query rows a key head at most");
-    need(!key("sample_from_anchor")->u && !key("attention.causal")->u, "drafts from the mask rows, a block's rows "
-                                                                       "seeing each other");
+    const MetaValue* causal = opt("attention.causal");   // llama.cpp's layout leaves it out: not causal
+    need(!key("sample_from_anchor")->u && !(causal && causal->u), "drafts from the mask rows, a block's rows "
+                                                                   "seeing each other");
+    need(layers == 3, "three layers, one for each layer run among its features");
     need(swa->type == MetaType::ARRAY && (int) swa->items.size() == layers && targets->type == MetaType::ARRAY &&
              targets->items.size() == 4 && (int) targets->items[3].u == visits,
          "a window pattern a layer, three layer runs and the final state as its features");
@@ -504,6 +524,14 @@ void Inkling2::ds_load() {
     const uint64_t E = (uint64_t) n_embd_, hq = (uint64_t) n_head_ * head_dim_, kv = (uint64_t) n_kv_ * head_dim_,
                    ff = (uint64_t) ds_ff_, R = (uint64_t) ds_rank_, V = (uint64_t) n_vocab_;
     const size_t cell = kv * sizeof(uint16_t);
+    // llama.cpp's layout: the steps this engine takes below made already by the converter (ds_layout.hpp)
+    const DsFolded fd = ds_folded_ ? ds_folded(f, (int) ds_.size(), E, R, V, (uint64_t) n_unpadded_, opt_.draft_model)
+                                   : DsFolded{};
+    const auto up = [&](const auto& v) {
+        void* d = dmalloc(v.size() * sizeof(v[0]), "the drafter");
+        ck(cudaMemcpy(d, v.data(), v.size() * sizeof(v[0]), cudaMemcpyHostToDevice), "the drafter");
+        return d;
+    };
     for (size_t l = 0; l < ds_.size(); ++l) {
         DsLayer& L = ds_[l];
         const std::string b = "blk." + std::to_string(l) + ".";
@@ -518,7 +546,7 @@ void Inkling2::ds_load() {
         L.down = mat(b + "ffn_down.weight", ff, E);
         L.attn_norm = f32(b + "attn_norm.weight", E);
         L.ffn_norm = f32(b + "ffn_norm.weight", E);
-        L.dflare = f32(b + "dflare_norm.weight", E);
+        L.dflare = f32(b + (ds_folded_ ? "ctx_norm.weight" : "dflare_norm.weight"), E);
         L.q_norm = f32(b + "attn_q_norm.weight", (uint64_t) head_dim_);
         L.k_norm = f32(b + "attn_k_norm.weight", (uint64_t) head_dim_);
         L.k_ctx_norm = f32(b + "attn_k_ctx_norm.weight", (uint64_t) head_dim_);
@@ -532,7 +560,9 @@ void Inkling2::ds_load() {
             ck(cudaMemset(L.tags, 0xff, (size_t) L.cap * sizeof(long long)), "the drafter's caches");
         }
     }
-    {   // each mix's weights over the four features, a softmax (in double) of the file's
+    if (ds_folded_) {   // each mix's weights over the four features, after their softmax already
+        ds_alpha_ = (float*) up(fd.alpha);
+    } else {   // each mix's weights over the four features, a softmax (in double) of the file's
         const TensorInfo* t = find("dspark_fuse.weight", kTypeF32, 4, 4);
         f.payload(*t);
         const float* raw = (const float*) f.data(*t);
@@ -546,33 +576,45 @@ void Inkling2::ds_load() {
         ds_alpha_ = (float*) dmalloc(sizeof(al), "the drafter");
         ck(cudaMemcpy(ds_alpha_, al, sizeof(al), cudaMemcpyHostToDevice), "the drafter");
     }
-    ds_mask_ = f32("mask_embd.weight", E);
+    if (ds_folded_) {
+        ds_mask_ = (float*) up(fd.mask);
+        if (!fd.tnorm.empty()) ds_tnorm_ = (float*) up(fd.tnorm);   // the anchor's norm (the target's values)
+    } else {
+        ds_mask_ = f32("mask_embd.weight", E);
+    }
     ds_norm_ = f32("output_norm.weight", E);
-    ds_mnorm_ = f32("dspark_norm.weight", E);
+    ds_mnorm_ = f32(ds_folded_ ? "markov_ctx_norm.weight" : "dspark_norm.weight", E);
     ds_jb_ = f32("joint_proj.bias", 3 * R);
-    ds_ob_ = f32("dspark_hidden_out.bias", E);
-    ds_w1_ = (uint16_t*) to_dev(find("markov_w1.weight", kTypeBF16, R, V));
+    if (ds_folded_) {
+        ds_w1_ = (uint16_t*) up(fd.w1);
+    } else {
+        ds_ob_ = f32("dspark_hidden_out.bias", E);
+        ds_w1_ = (uint16_t*) to_dev(find("markov_w1.weight", kTypeBF16, R, V));
+    }
     {   // the recurrence's projection by its inputs: [state ; previous token's row] | hidden | context
         const uint64_t in = 2 * R + 2 * E;
-        const TensorInfo* t = find("joint_proj.weight", kTypeBF16, in, 3 * R);
-        f.payload(*t);
-        const uint16_t* w = (const uint16_t*) f.data(*t);
+        const uint16_t* w = nullptr;
+        if (ds_folded_) {   // the file's rows (Q8_0 as published) as BF16
+            w = fd.joint.data();
+        } else {
+            const TensorInfo* t = find("joint_proj.weight", kTypeBF16, in, 3 * R);
+            f.payload(*t);
+            w = (const uint16_t*) f.data(*t);
+        }
         std::vector<uint16_t> sp(3 * R * 2 * R), h(3 * R * E), c(3 * R * E);
         for (uint64_t o = 0; o < 3 * R; ++o) {
             std::memcpy(&sp[o * 2 * R], w + o * in, 2 * R * 2);
             std::memcpy(&h[o * E], w + o * in + 2 * R, E * 2);
             std::memcpy(&c[o * E], w + o * in + 2 * R + E, E * 2);
         }
-        const auto up = [&](const std::vector<uint16_t>& v, uint64_t n_in) {
-            void* d = dmalloc(v.size() * 2, "the drafter");
-            ck(cudaMemcpy(d, v.data(), v.size() * 2, cudaMemcpyHostToDevice), "the drafter");
-            return Dev{d, kTypeBF16, (int) n_in, (int) (3 * R)};
+        const auto up16 = [&](const std::vector<uint16_t>& v, uint64_t n_in) {
+            return Dev{up(v), kTypeBF16, (int) n_in, (int) (3 * R)};
         };
-        ds_wsp_ = up(sp, 2 * R);
-        ds_wh_ = up(h, E);
-        ds_wf_ = up(c, E);
+        ds_wsp_ = up16(sp, 2 * R);
+        ds_wh_ = up16(h, E);
+        ds_wf_ = up16(c, E);
     }
-    {   // hidden_out's columns as rows (fp32), for its fold into the output matrix (ds_fold())
+    if (!ds_folded_) {   // hidden_out's columns as rows (fp32), for its fold into the output matrix (ds_fold())
         const TensorInfo* t = find("dspark_hidden_out.weight", kTypeBF16, R, E);
         f.payload(*t);
         const uint16_t* w = (const uint16_t*) f.data(*t);
@@ -585,15 +627,20 @@ void Inkling2::ds_load() {
         ds_wt_ = (float*) dmalloc(wt.size() * 4, "the drafter");
         ck(cudaMemcpy(ds_wt_, wt.data(), wt.size() * 4, cudaMemcpyHostToDevice), "the drafter");
     }
-    ds_fold_ = Dev{dmalloc(V * (R / 32) * 34, "the drafter"), 8u, (int) R, (int) V};
-    ds_fold_b_ = (float*) dmalloc(V * 4, "the drafter");
+    if (ds_folded_) {   // the file's fold (markov_w2 and its bias), made from the model's own output matrix
+        ds_fold_ = Dev{up(fd.fold), 8u, (int) R, (int) V};
+        ds_fold_b_ = (float*) up(fd.fold_b);
+    } else {
+        ds_fold_ = Dev{dmalloc(V * (R / 32) * 34, "the drafter"), 8u, (int) R, (int) V};
+        ds_fold_b_ = (float*) dmalloc(V * 4, "the drafter");
+    }
     ds_ring_ = (float*) dmalloc((size_t) kDsRing * E * 4, "the drafter");
     ds_prev_ = (int32_t*) dmalloc(64, "the drafter");
     ds_pick_ = (Likeliest*) dmalloc((size_t) ds_block_ * sizeof(Likeliest), "the drafter");
     ds_at_ = (long long*) dmalloc((2 * kDsRows + 1) * sizeof(long long), "the drafter");
     h_ds_row_ = (float*) hmalloc(E * 4, "pinned memory");
     h_ds_at_ = (long long*) hmalloc((2 * kDsRows + 1) * sizeof(long long), "pinned memory");
-    ds_fold();
+    if (!ds_folded_) ds_fold();
 #if defined(STRATA_GPU_METAL)
     const bool screen_ok = (output_.type == 8u || output_.type == 13u) && ds_screens(n_embd_, ds_rank_);
 #else
@@ -735,7 +782,7 @@ void Inkling2::ds_block(int nb) {
     ck(cudaMemcpyAsync(ds_at_, h_ds_at_, (2 * kDsRows + 1) * sizeof(long long), cudaMemcpyHostToDevice, cs(st_)),
        "the drafter");
     ck(cudaMemcpyAsync(ds_y_, h_ds_row_, E * 4, cudaMemcpyHostToDevice, cs(st_)), "the drafter");
-    rms_norm(ds_y_, fp(tok_norm_), ds_x_, n_embd_, 1, rms_eps_, st_);
+    rms_norm(ds_y_, ds_tnorm_ ? ds_tnorm_ : fp(tok_norm_), ds_x_, n_embd_, 1, rms_eps_, st_);
     const DsPos p{ds_at_, 0};
     ds_block_in(ds_x_, ds_mask_, n_embd_, nb, p, ds_at_ + 2 * kDsRows, ds_state_, ds_rank_, ds_prev_, ds_ring_,
                 kDsRing, ds_frc_, st_);

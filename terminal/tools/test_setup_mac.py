@@ -831,6 +831,55 @@ class SmallerModelSetup(unittest.TestCase):
                     self.assertIn("--draft-model", cfg["args"])
                 self.assertNotIn("--pack", cfg["args"])
 
+    def test_inkling_gsq_rco_by_name_takes_its_repository_and_its_own_draft_model(self):
+        # a GSQ-RCO size (not measured on a Mac, so only by name): ISTA-DASLab's file with no _file suffix and its
+        # DSpark drafter, checked against the size's own pin (Unsloth's has the same name)
+        from contextlib import ExitStack
+        fam = setup.FAMILIES["inkling"]
+        d = fam["models"]["GSQ-RCO-IQ3_S"]
+        draft = d["draft_model"]
+        with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
+            root = Path(tmp)
+            urls, checked = [], []
+
+            def download(url, path, *a, **k):
+                urls.append(url)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"fixture")
+
+            def patch(obj, name, **kw):
+                return stack.enter_context(mock.patch.object(obj, name, **kw))
+            patch(M, "ROOT", new=root)
+            patch(setup, "_CONTROL_HOME", new=root)
+            patch(setup, "feed_models_setup")
+            patch(M, "mac_configs", return_value=[])
+            patch(M, "mac_info", return_value={"chip": "M5 Ultra", "ram_gb": 64, "macos": "26.0", "arm64": True,
+                                               "clt": "/tools", "perf_cores": 24})
+            patch(setup, "data_folder", return_value=(root, []))
+            patch(setup, "free_gb", return_value=1000)
+            patch(setup, "pip_install")
+            patch(setup, "llama_override", return_value=root / "llama")
+            patch(M, "build_engine", return_value=root / "strata-poly")
+            patch(setup, "download", side_effect=download)
+            patch(setup, "done", side_effect=lambda p: p.is_file())
+            patch(setup, "verify_sha256", side_effect=lambda p, size, sha, **k: checked.append((p.name, size, sha)))
+            patch(setup, "check_shards")
+            patch(setup, "run")
+            patch(setup, "find_in", return_value=None)
+            patch(M.shutil, "copyfile")
+            write = patch(setup, "write_setup_config")
+            patch(setup, "write_run_script", return_value=root / "run.sh")
+            patch(M, "start", side_effect=AssertionError("server start"))
+            for fn in ("say", "ok", "step", "warn"):
+                patch(setup, fn)
+            rc = M.main(["--family", "inkling", "--model", "GSQ-RCO-IQ3_S", "--yes", "--no-start", "--vision", "no"])
+            self.assertEqual(rc, 0)
+            self.assertEqual(urls, [d["hf"] + "Inkling-2-Mini-GSQ-RCO-IQ3_S.gguf", d["hf"] + draft])
+            self.assertIn((draft, *d["sha256"][draft]), checked)
+            self.assertNotIn((draft, *fam["sha256"][draft]), checked)
+            args = write.call_args.args[1]["args"]
+            self.assertEqual(Path(args[args.index("--draft-model") + 1]).name, draft)
+
     def test_inkling_takes_a_measured_size_that_fits_and_reads_pictures_on_the_cpu(self):
         from contextlib import ExitStack
         family = "inkling"
