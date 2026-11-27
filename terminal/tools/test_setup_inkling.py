@@ -50,8 +50,75 @@ class Pins(unittest.TestCase):
         self.assertEqual(setup.POLY_GGUF_ARCHS["inkling"], ("inkling2_loop", "inkling2"))
 
 
+class UncensoredLoraFile(unittest.TestCase):
+    """The adapter shipped in data/inkling-uncensored-lora: llama.cpp's LoRA GGUF layout, as the engine's --lora reads
+    it (inkling2.cpp lora_open()), and the bytes converted from the pinned upstream adapter."""
+
+    def test_the_shipped_adapter(self):
+        from tools.gguf_reader import GGUFFile
+        import hashlib
+        path = setup.INKLING_LORA
+        self.assertEqual(path, ROOT / "data" / "inkling-uncensored-lora" / "Inkling-2-Mini-Uncensored-LoRA.gguf")
+        self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(),
+                         "84d18625228d4a95e8ca41e2d1e328aa1cc162a681dc94e8f57635dae8277ed3")
+        g = GGUFFile(path)
+        self.assertEqual((g.metadata["general.type"], g.metadata["adapter.type"], g.metadata["adapter.lora.alpha"],
+                          g.metadata["general.architecture"]), ("adapter", "lora", 2.0, "inkling2_loop"))
+        want = []
+        for il in range(4, 24):
+            want += [(f"blk.{il}.attn_output.weight.lora_a", [3072, 2]), (f"blk.{il}.attn_output.weight.lora_b", [2, 2304])]
+        self.assertEqual([(t.name, t.shape) for t in g.tensors], want)
+        self.assertEqual({t.type_name for t in g.tensors}, {"F32"})
+
+
 class Main(unittest.TestCase):
     setUp, tearDown, main = glm_tests.Main.setUp, glm_tests.Main.tearDown, glm_tests.Main.main
+
+    def lora_args(self, argv=(), answers=None):
+        code, out, _ = self.main(argv, family="inkling", model="UD-Q3_K_XL", ram=64.0, vram=32607 / 1024,
+                                 answers=answers)
+        self.assertEqual(code, 0, out)
+        args = json.loads((self.t / "strata-inkling-ud-q3_k_xl.json").read_text())["args"]
+        return (args[args.index("--lora") + 1] if "--lora" in args else None), out
+
+    def test_uncensored_lora_is_off_unless_chosen(self):
+        lora, out = self.lora_args()                                   # --yes: the question's default, no
+        self.assertIsNone(lora)
+        self.assertIn("uncensored LoRA: off", out)
+        lora, _ = self.lora_args(answers={})                           # asked, Enter: no
+        self.assertIsNone(lora)
+        self.assertEqual(len([q for q in self.asked if "uncensored LoRA" in q]), 1)
+
+    def test_uncensored_lora_asked_or_given_and_kept(self):
+        lora, out = self.lora_args(answers={"uncensored LoRA": "y"})
+        self.assertEqual(Path(lora), setup.INKLING_LORA)
+        self.assertIn("uncensored LoRA: ON", out)
+        lora, _ = self.lora_args()                                     # a later run with --yes keeps it
+        self.assertEqual(Path(lora), setup.INKLING_LORA)
+        lora, _ = self.lora_args(("--uncensored-lora", "off"))
+        self.assertIsNone(lora)
+        lora, _ = self.lora_args()                                     # and off is kept too
+        self.assertIsNone(lora)
+        lora, _ = self.lora_args(("--uncensored-lora", "on"))
+        self.assertEqual(Path(lora), setup.INKLING_LORA)
+
+    def test_uncensored_lora_another_file_or_a_missing_one(self):
+        other = self.t / "my-adapter.gguf"
+        other.write_bytes(b"GGUF")
+        lora, out = self.lora_args(("--uncensored-lora", str(other)))
+        self.assertEqual(Path(lora), other.resolve())
+        lora, _ = self.lora_args()                                     # kept by a later run
+        self.assertEqual(Path(lora), other.resolve())
+        code, out, _ = self.main(("--uncensored-lora", str(self.t / "none.gguf")), family="inkling",
+                                 model="UD-Q3_K_XL", ram=64.0, vram=32607 / 1024)
+        self.assertNotEqual(code, 0)
+        self.assertIn("the LoRA adapter is missing", out)
+
+    def test_uncensored_lora_of_another_family_is_not_used(self):
+        code, out, cfg = self.main(("--uncensored-lora", "on"))       # GLM, the harness's family
+        self.assertEqual(code, 0, out)
+        self.assertRegex(out, r"not used with .*--uncensored-lora")
+        self.assertNotIn("--lora", cfg["args"])
 
     def test_install_each_size(self):
         for size, _n in SIZES:

@@ -2043,6 +2043,10 @@ void usage() {
                  "                         --no-loop-bf16 says the default (F32; the last one counts)\n"
                  "  --loopcd-hidden F      Inkling 2: optional LoopCD-Hidden extrapolation weight at loop exit (0 to 1,\n"
                  "                         default 0 = off; STRATA_INK_LOOPCD_HIDDEN=F overrides it)\n"
+                 "  --lora FILE            Inkling 2: a LoRA adapter (llama.cpp's LoRA GGUF) on its attention's\n"
+                 "                         output product (attn_output), added as the model runs; the model's own\n"
+                 "                         file is left as it is (default: none)\n"
+                 "  --lora-scaled FILE S   --lora at strength S (1 = the adapter as trained)\n"
                  "  --prompt-int8          Inkling 2 on an RTX 20 (Turing): its prompt products on the int8 tensor\n"
                  "                         cores as on RTX 30 and newer, not as halves and cuBLAS (the default on\n"
                  "                         Turing): faster prompts, and the answers move more, activations int8 a\n"
@@ -2185,6 +2189,21 @@ int main(int argc, char** argv) {
             std::string t = val(), low = t;
             for (char& c : low) c = (char) std::tolower((unsigned char) c);
             o.attn_requant = (low == "off" || low == "none") ? std::string() : t;
+        }
+        else if (a == "--lora" || a == "--lora-scaled") {
+            const bool scaled = a == "--lora-scaled";
+            o.lora = val();
+            o.lora_scale = 1.f;
+            if (scaled) {
+                const char* raw = val();
+                char* end = nullptr;
+                const float x = std::strtof(raw, &end);
+                if (end == raw || *end != '\0' || !std::isfinite(x)) {
+                    std::fprintf(stderr, "strata-poly: --lora-scaled %s %s: expected a number\n", o.lora.c_str(), raw);
+                    std::exit(2);
+                }
+                o.lora_scale = x;
+            }
         }
         else if (a == "--loop-bf16") o.loop_bf16 = true;
         else if (a == "--no-loop-bf16") o.loop_bf16 = false;

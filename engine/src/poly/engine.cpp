@@ -2162,6 +2162,10 @@ std::unique_ptr<Engine> Engine::open(const Options& o) {
         throw std::runtime_error("--attn-requant, --loop-bf16, --loopcd-hidden and --prompt-int8 / --no-prompt-int8 are Inkling 2's; this is a '" + name + "' model");
     if (!std::isfinite(o.loopcd_hidden) || o.loopcd_hidden < 0.f || o.loopcd_hidden > 1.f)
         throw std::runtime_error("--loopcd-hidden must be between 0 and 1");
+    if (!o.lora.empty() && !inkling)
+        throw std::runtime_error("--lora is Inkling 2's (its attention's output product); this is a '" + name +
+                                 "' model");
+    if (!std::isfinite(o.lora_scale)) throw std::runtime_error("--lora-scaled needs a finite strength");
     if (o.expert_gpu >= 0 && (!inkling || !o.layer_split.empty()))
         throw std::runtime_error("--expert-gpu is Inkling 2's, on one card beside it (no --layer-split); this is a '" +
                                  name + "' model");

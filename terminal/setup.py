@@ -1390,6 +1390,9 @@ REPO_PINS = {
 REV_PINS = {(UNSLOTH_REPO, UNSLOTH_V31_REVISION): {**UNSLOTH_V31_SHARDS, **UNSLOTH_Q4_V31_SHARDS}}
 # EXPERIMENTAL, off by default (setup asks): a control vector shipped with the repository, see its README
 ESP_VECTOR = ROOT / "data" / "experimental-speed-projection" / "Qwen3.8-Flash-Next-experimental-speed-projection.gguf"
+# EXPERIMENTAL, off by default (setup asks): Inkling 2 Mini's uncensored LoRA shipped with the repository, the engine's
+# --lora on its attention output (data/inkling-uncensored-lora/README.md)
+INKLING_LORA = ROOT / "data" / "inkling-uncensored-lora" / "Inkling-2-Mini-Uncensored-LoRA.gguf"
 # the image encoder on the GPU (~1.2 GB at 1024 image tokens) warms up before the engine starts, so the engine
 # sizes its expert slots around it and the default reserve (700 MiB) is enough; engines before 0.1.2 need more
 VISION_GPU_SMALL_RESERVE_MIB = 1000    # the tip for images on a <= 12 GB card (the engine's LOW line asked ~1003)
@@ -8596,6 +8599,7 @@ def choices_from_config(cfg_path: Path) -> dict:
             "kv": val("--kv") if val("--kv") in ("int8", "q4_0") else None,
             "vision": ("gpu" if vis.get("gpu") else "cpu") if isinstance(vis, dict) else "none",
             "esp": ("on" if Path(esp_path).name == ESP_VECTOR.name else esp_path) if esp_path else "off",
+            "lora": ("on" if Path(val("--lora")).name == INKLING_LORA.name else val("--lora")) if val("--lora") else "off",
             "host": cfg.get("host"), "api_key": cfg.get("api_key"), "port": cfg.get("port"), "gpu": cfg.get("gpu"),
             "layer_split": cfg.get("layer_split"), "cuda": 12 if config_toolkit(cfg) == 12 else None,
             # #493: --vram-reserve-mib given at setup (images write the default 700 themselves)
@@ -10233,6 +10237,52 @@ def poly_small_card(a, fam, paths) -> str | None:
     return "on"
 
 
+def is_off(choice) -> bool:
+    """An on|off|FILE answer that means off (or nothing given)."""
+    return str(choice or "off").strip().lower() in ("off", "no", "n", "0", "none")
+
+
+def saved_lora(paths) -> str | None:
+    """The --lora of the first earlier run config of this model there is (None: none, or not set)."""
+    for p in paths:
+        if p is None or not p.is_file():
+            continue
+        try:
+            args = json.loads(p.read_text(encoding="utf-8-sig")).get("args") or []
+        except (OSError, ValueError, AttributeError):
+            continue
+        i = args.index("--lora") if "--lora" in args else -1
+        return str(args[i + 1]) if 0 <= i < len(args) - 1 else None
+    return None
+
+
+def inkling_lora(a, family: str, paths) -> Path | None:
+    """EXPERIMENTAL, off unless chosen: the LoRA adapter Inkling 2 Mini runs with (the engine's --lora), or None.
+    --uncensored-lora on|off|GGUF says it; else setup asks, its default the earlier run config's choice (so --yes keeps
+    it).  "on" is the adapter in data/inkling-uncensored-lora; a path, another adapter in llama.cpp's LoRA GGUF."""
+    if family != "inkling":
+        return None
+    choice = (getattr(a, "uncensored_lora", None) or "").strip()
+    if not choice:
+        before = saved_lora(paths)
+        say()
+        say("  EXPERIMENTAL - uncensored LoRA: OpenUncensored's 1 MB adapter for Inkling 2 Mini, added while the model")
+        say("  runs (the attention output of layers 4-23); the model file is not changed. It removes the model's")
+        say("  refusals: it answers requests it would otherwise decline, and you are responsible for what it writes.")
+        say("  Off unless you choose it. Details: data/inkling-uncensored-lora/README.md")
+        yes = ask("Turn on the uncensored LoRA?", ["y", "n"], "y" if before else "n", a.yes) == "y"
+        choice = (before if before and Path(before).name != INKLING_LORA.name else "on") if yes else "off"
+    if is_off(choice):
+        ok("uncensored LoRA: off")
+        return None
+    lora = INKLING_LORA if choice.lower() in ("on", "yes", "y", "1") else Path(choice).expanduser().resolve()
+    if not lora.is_file():
+        fail(f"the LoRA adapter is missing: {lora}",
+             "run setup with --uncensored-lora off, or give the path of an adapter GGUF")
+    ok("uncensored LoRA: ON (experimental)" + ("" if lora == INKLING_LORA else f": {lora}"))
+    return lora
+
+
 _INKLING_Q2_RE = re.compile(r"(?:^|[^a-z0-9])q2(?:[_\-.]|$)", re.IGNORECASE)
 
 
@@ -10682,7 +10732,8 @@ def poly_setup(a, family, gpu, hip, cuda_tk, multi, ram, data, elsewhere, port, 
         ("--resident-budget-gib", a.resident_budget_gib is not None),
         ("--draft-vocab", a.draft_vocab), ("--layer-split", a.layer_split and not multi), ("--calibrate", a.calibrate),
         ("--experimental-speed-projection",
-         (a.experimental_speed_projection or "off").strip().lower() not in ("off", "no", "n", "0"))) if given]
+         (a.experimental_speed_projection or "off").strip().lower() not in ("off", "no", "n", "0")),
+        ("--uncensored-lora", family != "inkling" and not is_off(getattr(a, "uncensored_lora", None)))) if given]
     if unused:
         warn(f"not used with {title} (its engine has no such setting): " + ", ".join(unused))
 
@@ -10805,6 +10856,8 @@ def poly_setup(a, family, gpu, hip, cuda_tk, multi, ram, data, elsewhere, port, 
         ok(f"conversation cache: 40% of the RAM free once the model is loaded, up to {POLY_CONV_CACHE_MIB} MiB")
     else:
         ok("conversation cache: " + (f"up to {conv} MiB of RAM" if conv else "off (the last conversation is kept)"))
+
+    lora = inkling_lora(a, family, [cfg_path, earlier])
 
     draft_choice = poly_draft_on(a, [cfg_path, earlier])
     eff_parallel = (a.parallel if a.parallel >= 2 else 1) if a.parallel is not None else (
@@ -10989,6 +11042,8 @@ def poly_setup(a, family, gpu, hip, cuda_tk, multi, ram, data, elsewhere, port, 
            "that much less)")
     if fam.get("tail_skip"):
         args += ["--tail-skip", str(fam["tail_skip"])]
+    if lora is not None:
+        args += ["--lora", str(lora)]
     small = poly_small_card(a, fam, [cfg_path, adopted if adopted is not None and adopted.name == cfg_path.name else None])
     part = small is not None and not multi and poly_held_gb(d, vram) < d["arena_gb"]
     if part and small == "on":
@@ -12892,6 +12947,9 @@ def main() -> int:
     ap.add_argument("--experimental-speed-projection", metavar="on|off|GGUF",
                     help="EXPERIMENTAL, off by default: the control vector in data/experimental-speed-projection "
                          "(or another GGUF) as a projection on layers 4-44; see docs/DETAILS.md")
+    ap.add_argument("--uncensored-lora", metavar="on|off|GGUF",
+                    help="EXPERIMENTAL, off by default: Inkling 2 Mini with the uncensored LoRA in "
+                         "data/inkling-uncensored-lora (or another LoRA GGUF), applied as the model runs; see its README")
     ap.add_argument("--port", type=int, help="the server's port (default: the one the install was set up with, 8080 for a new one)")
     ap.add_argument("--gpu", help="one GPU, numbered as nvidia-smi numbers them (AMD: as setup lists them) (default: asked when several can be "
                                   "used; with --setup it is saved, when starting it is for that start only)")
@@ -13156,6 +13214,7 @@ def main() -> int:
                 a.kv = a.kv or ch["kv"]
                 a.vision = a.vision or ch["vision"]
                 a.experimental_speed_projection = a.experimental_speed_projection or ch["esp"]
+                a.uncensored_lora = a.uncensored_lora or ch.get("lora")
                 a.host, a.api_key = a.host or ch["host"], a.api_key or ch["api_key"]
                 a.port = a.port or ch["port"]
                 if a.vram_reserve_mib is None:          # #493: an explicit reserve set up before

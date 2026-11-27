@@ -372,6 +372,20 @@ default `0` = off; `STRATA_INK_LOOPCD_HIDDEN=F` overrides it). For example, `--l
 at `low` thinking effort extrapolates the final loop pass away from the first pass with negligible decode overhead and
 stays compatible with DSpark speculative decoding across CUDA, HIP, and Metal.
 
+### Uncensored LoRA (experimental, off by default)
+
+PolyStrata ships OpenUncensored's
+[Inkling 2 Mini Uncensored LoRA](https://huggingface.co/OpenUncensored/Inkling-2-Mini-Uncensored-LoRA) as an 843 KB
+GGUF in `terminal/data/inkling-uncensored-lora/`. It stays off unless you turn it on. It is a rank-2 adapter on the
+attention output of layers 4 to 23. The engine adds it while the model runs (`--lora`), so the model file you
+downloaded is not changed. Its makers describe it as an abliteration that removes the model's refusals: the model
+answers requests it would otherwise decline, and you are responsible for what it writes with it on.
+
+Setup asks "Turn on the uncensored LoRA?" (default no), or pass `--uncensored-lora on` (`off`, or the path of another
+LoRA GGUF). It is on for every request while it is loaded. It has not been run on a GPU yet, so it has no speed or
+answer numbers here. What was checked, and how the file was made: its
+[README](../../terminal/data/inkling-uncensored-lora/README.md).
+
 ## Checking a change to the engine
 
 Two tools, built with `strata-poly` (CUDA and HIP), check that a change to Inkling 2's code keeps its output:

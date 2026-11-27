@@ -132,6 +132,9 @@ struct Options {
                                   ///< (q4_0, q5_0, q5_k, q6_k or iq4_nl; --attn-requant); empty: the file's types
     bool loop_bf16 = false;       ///< Inkling 2: its loop controllers' matrices in BF16, not the file's F32 (--loop-bf16)
     float loopcd_hidden = 0.f;    ///< Inkling 2: optional LoopCD-Hidden extrapolation weight at loop exit, 0..1 (0 = off)
+    std::string lora;             ///< Inkling 2: a LoRA adapter (llama.cpp's LoRA GGUF) on its attention's output
+                                  ///< product, y += scale * B (A x) (--lora, --lora-scaled); empty: none
+    float lora_scale = 1.f;       ///< its strength: 1 is the adapter as trained (--lora-scaled FILE S)
     int prompt_int8 = -1;         ///< Inkling 2: its prompt products on the int8 tensor cores, as on Ampere, on Turing and
                                   ///< AMD's RDNA3 / RDNA4 (gemm_iq_i8_turing()); -1: the default (Turing off, AMD on);
                                   ///< 1: --prompt-int8; 0: --no-prompt-int8, the halves and BLAS

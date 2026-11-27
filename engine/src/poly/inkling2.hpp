@@ -106,6 +106,8 @@ private:
         Dev q_norm, k_norm, v_norm;          ///< a full layer's
         Dev k_dyn, v_dyn;                    ///< a full layer's convolution taps by the input
         Dev attn_query, ffn_query;           ///< the mixes over the residual streams
+        Dev lora_a, lora_b;                  ///< --lora on wo: A [hq -> rank], B [rank -> n_embd] with its
+                                             ///< scale; null where the adapter leaves the layer alone
         Dev ffn_norm;
         // a core layer's
         Dev msg_query;
@@ -190,6 +192,8 @@ private:
                                                        : il + (n_pass_ - 1) * core;
     }
     Dev msg_query(int il);
+    void lora_open();
+    void lora_load();
     void ds_open();
     void ds_load();
     void ds_commit(int n);
@@ -297,6 +301,13 @@ private:
     float* kvw_ = nullptr;                           ///< their halves, keys then values (kvq8_)
     size_t kvw_halves_ = 0;
     float* scores_ = nullptr;   ///< score_ where it is apart from the scratch (scores_apart())
+    // --lora: the adapter's file, rank and scale (alpha / rank * --lora-scaled's S), its matrices in one buffer, and
+    // a call's rows of A x and of the B (A x) added to the attention's output
+    std::unique_ptr<Shards> lora_file_;
+    int lora_rank_ = 0;
+    float lora_scale_ = 0.f;
+    void* lora_dev_ = nullptr;
+    float *lora_t_ = nullptr, *lora_y_ = nullptr;
     // Optional LoopCD-Hidden (--loopcd-hidden / STRATA_INK_LOOPCD_HIDDEN): extrapolate pass-1 -> final-pass state
     float loopcd_hidden_ = 0.f;
     float *cd_h1_ = nullptr, *cd_bl2_ = nullptr;

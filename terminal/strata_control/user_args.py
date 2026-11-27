@@ -25,14 +25,15 @@ USER_KEY = "user_args"
 WRITTEN_KEY = "args_written"
 
 #: option groups the engine takes more than one of, or that make sense only together: kept whole
-#: (the control vector options of the experimental speed projection and the person's own vectors, #3216)
+#: (the control vector options of the experimental speed projection and the person's own vectors, #3216; Inkling 2's LoRA
+#: adapter, setup's uncensored one or the person's own)
 USER_KEPT_FLAGS = frozenset({"--control-vector", "--control-vector-scaled", "--control-vector-layer-range", "--cvec-mode",
-                             "--cvec-dir"})
+                             "--cvec-dir", "--lora", "--lora-scaled"})
 
 
 #: options that take more than one value, and how many (``--control-vector-layer-range 4 44``): written as separate argv
 #: entries, never as one ``4,44``, and removed with all of their values (#3504)
-MULTI_VALUE_FLAGS = {"--control-vector-layer-range": 2}
+MULTI_VALUE_FLAGS = {"--control-vector-layer-range": 2, "--lora-scaled": 2}
 
 
 def value_tokens(flag: str, value: Any) -> list[str]:

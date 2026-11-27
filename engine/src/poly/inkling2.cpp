@@ -2,6 +2,7 @@
 // inkling2 graph (src/models/inkling2.cpp and inkling2-loop.cpp).
 #include "inkling2.hpp"
 
+#include "gguf_types.hpp"
 #include "runtime.hpp"
 #include "strata/poly/kernels.hpp"
 #include "strata/kernels/native_mmvq.hpp"
@@ -336,7 +337,104 @@ void Inkling2::load_geometry() {
                      "attention.sliding_window_pattern differs between a layer's applications");
             }
     if (!opt_.draft_model.empty()) ds_open();
+    if (!opt_.lora.empty()) lora_open();
     if (opt_.window == 0) opt_.window = ds_file_ ? ds_block_ : 1;
+}
+
+// --lora: an adapter in llama.cpp's LoRA GGUF layout (general.type "adapter", adapter.type "lora", adapter.lora.alpha)
+// whose every tensor is one of a pair on a layer's attention output product: blk.N.attn_output.weight.lora_a
+// [hq, rank] and blk.N.attn_output.weight.lora_b [rank, n_embd], F32, F16 or BF16, N the layer of weights (0 to 23 for
+// Inkling 2 Mini: a core layer's adapter acts on each of its passes, as merged weights would).  The product is the
+// file's own, untouched: the adapter adds scale * B (A x) to its output (layer_head()), scale alpha / rank times
+// --lora-scaled's S, PEFT's.  Checked here, before anything is on the card; lora_load() puts the matrices there.
+namespace {
+const char kLoraWo[] = ".attn_output.weight.lora_";
+
+std::string lora_name(int il, char ab) { return "blk." + std::to_string(il) + kLoraWo + ab; }
+}  // namespace
+
+void Inkling2::lora_open() {
+    const std::string& path = opt_.lora;
+    lora_file_ = std::make_unique<Shards>(path);
+    const Shards& f = *lora_file_;
+    const auto need = [&](bool ok, const std::string& what) {
+        if (!ok) throw std::runtime_error(path + ": not a LoRA adapter for Inkling 2's attention output (" + what + ")");
+    };
+    const MetaValue* type = f.get("general.type");
+    const MetaValue* kind = f.get("adapter.type");
+    need(type && type->s == "adapter" && kind && kind->s == "lora", "general.type adapter and adapter.type lora");
+    const MetaValue* arch = f.get("general.architecture");
+    need(!arch || arch->s.rfind("inkling2", 0) == 0,
+         "general.architecture is " + (arch ? arch->s : std::string()) + ", not inkling2_loop");
+    const int64_t e = n_embd_, hq = (int64_t) n_head_ * head_dim_;
+    std::vector<char> have((size_t) n_layer_ * 2, 0);
+    int rank = 0;
+    f.each([&](const TensorInfo& t) {
+        // blk.<layer>.attn_output.weight.lora_a or .lora_b, nothing else
+        const std::string& n = t.name;
+        size_t at = 4, end = 4;
+        while (end < n.size() && n[end] >= '0' && n[end] <= '9') ++end;
+        const std::string tail = end < n.size() ? n.substr(end) : std::string();
+        need(n.compare(0, 4, "blk.") == 0 && end > at && end - at <= 4 && tail.size() == sizeof(kLoraWo) &&
+                 tail.compare(0, sizeof(kLoraWo) - 1, kLoraWo) == 0 && (tail.back() == 'a' || tail.back() == 'b'),
+             "tensor " + n + ": only blk.N.attn_output.weight.lora_a / lora_b are applied");
+        const int il = std::stoi(n.substr(at, end - at));
+        const bool a = tail.back() == 'a';
+        need(il < n_layer_, "tensor " + n + ": the model has " + std::to_string(n_layer_) + " layers");
+        need(t.type == kTypeF32 || t.type == kTypeF16 || t.type == kTypeBF16, "tensor " + n + " is not F32, F16 or BF16");
+        need(t.shape.size() == 2, "tensor " + n + " is " + shape_of(t));
+        const int64_t r = (int64_t) (a ? t.shape[1] : t.shape[0]);
+        need((int64_t) t.shape[a ? 0 : 1] == (a ? hq : e) && r >= 1 && r <= 256 && (!rank || r == rank),
+             "tensor " + n + " is " + shape_of(t) + ", expected [" + (a ? std::to_string(hq) + ", rank" :
+                                                                        "rank, " + std::to_string(e)) + "]" +
+                 (rank ? ", rank " + std::to_string(rank) : std::string()));
+        rank = (int) r;
+        have[(size_t) il * 2 + (a ? 0 : 1)] = 1;
+    });
+    int layers = 0;
+    for (int il = 0; il < n_layer_; ++il) {
+        need(have[(size_t) il * 2] == have[(size_t) il * 2 + 1], "layer " + std::to_string(il) + " has lora_a or "
+                                                                   "lora_b without the other");
+        layers += have[(size_t) il * 2];
+    }
+    need(layers > 0, "no tensor");
+    lora_rank_ = rank;
+    const MetaValue* alpha = f.get("adapter.lora.alpha");
+    const float al = alpha && alpha->is_num() ? (float) alpha->num() : 0.f;
+    lora_scale_ = al > 0.f ? opt_.lora_scale * al / (float) rank : opt_.lora_scale;
+    std::fprintf(stderr, "strata-poly: LoRA %s on %d layers' attention output, rank %d, scale %g\n", path.c_str(),
+                 layers, rank, (double) lora_scale_);
+}
+
+// The adapter's matrices of the layers this card runs to VRAM, once, F32 in one buffer, B times the scale
+// (beside the drafter's: before the expert cache takes the rest).
+void Inkling2::lora_load() {
+    const Shards& f = *lora_file_;
+    const int64_t e = n_embd_, hq = (int64_t) n_head_ * head_dim_, r = lora_rank_;
+    std::vector<int> mine;
+    for (int il = 0; il < n_layer_; ++il)
+        if (runs(il) && f.find(lora_name(il, 'a'))) mine.push_back(il);
+    if (mine.empty()) return;
+    const size_t na = (size_t) (hq * r), nb = (size_t) (r * e);
+    float* d = (float*) dmalloc(mine.size() * (na + nb) * sizeof(float), "the LoRA adapter");
+    lora_dev_ = d;
+    std::vector<float> a(na), b(nb);
+    for (const int il : mine) {
+        const TensorInfo* ta = f.find(lora_name(il, 'a'));
+        const TensorInfo* tb = f.find(lora_name(il, 'b'));
+        f.payload(*ta);
+        f.payload(*tb);
+        type_to_floats(ta->type, f.data(*ta), a.data(), (int64_t) na);
+        type_to_floats(tb->type, f.data(*tb), b.data(), (int64_t) nb);
+        for (float& v : b) v *= lora_scale_;
+        Block& B = blocks_[(size_t) il];
+        ck(cudaMemcpy(d, a.data(), na * sizeof(float), cudaMemcpyHostToDevice), "the LoRA adapter");
+        B.lora_a = Dev{d, kTypeF32, (int) hq, (int) r};
+        d += na;
+        ck(cudaMemcpy(d, b.data(), nb * sizeof(float), cudaMemcpyHostToDevice), "the LoRA adapter");
+        B.lora_b = Dev{d, kTypeF32, (int) r, (int) e};
+        d += nb;
+    }
 }
 
 // --draft-model's DSpark drafter: its shape, checked against what guess_block() runs.
@@ -1025,6 +1123,11 @@ void Inkling2::assign_scratch() {
     att_ = fbuf(heads);
     aoraw_ = fbuf(e);
     fc_ = fbuf(e);
+    if (lora_file_) {
+        lora_t_ = fbuf(n * (size_t) lora_rank_);
+        lora_y_ = fbuf(e);
+        if (!lora_dev_ && scratch_) lora_load();
+    }
     // a token's scores of the whole context, and what ink_attend() keeps beside them
     score_n_ = std::max(kScoreFloats, ink_attend_floats(n_head_, n_kv_, head_dim_, opt_.max_context));
     if (scores_apart()) {   // sized for the context, not for a call's tokens: 64 MiB that both layouts share
@@ -2030,6 +2133,11 @@ void Inkling2::layer_head(Layer& L, int il, int n) {
         ink_attend(a, st_);
     }
     lin(B.wo, att_, aoraw_, n, att_q8 ? xqo_ : nullptr);
+    if (B.lora_a.p) {   // --lora: scale * B (A x) beside the file's product (B is scaled), from the attention's floats
+        lin(B.lora_a, att_, lora_t_, n);
+        lin(B.lora_b, lora_t_, lora_y_, n);
+        axpy(lora_y_, 1.f, aoraw_, n * n_embd_, true, st_);
+    }
     // the first layer of a block starts a new stream from the attention's output; the one it had joins the mixes
 #if defined(STRATA_GPU_METAL)
     if (n == 1 && !per_row && n_embd_ <= 4096) {
